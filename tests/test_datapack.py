@@ -415,6 +415,74 @@ class DataPackContractTests(unittest.TestCase):
             with self.subTest(motion=motion):
                 self.assertEqual(all(-10 <= math.floor(motion[axis] * scale) <= 10 for axis, scale in probes), expected)
 
+    def test_tick_flush_and_cleanup(self):
+        tick = read(
+            "player_motion/data/player_motion/function/internal/technical/"
+            "tick.mcfunction"
+        )
+        commands = [
+            line
+            for line in tick.splitlines()
+            if line and not line.startswith("#")
+        ]
+        self.assertEqual(
+            commands,
+            [
+                "schedule function player_motion:internal/technical/tick 1t replace",
+                "execute as @a at @s run function player_motion:internal/technical/flush_dimension",
+            ],
+        )
+
+        flush_dimension = read(
+            "player_motion/data/player_motion/function/internal/technical/"
+            "flush_dimension.mcfunction"
+        )
+        flush_commands = [
+            line
+            for line in flush_dimension.splitlines()
+            if line and not line.startswith("#")
+        ]
+        self.assertEqual(
+            flush_commands,
+            [
+                "execute as @e[tag=player_motion.pending] at @s run function player_motion:internal/launch/main",
+                "execute as @e[tag=player_motion.pending] at @s run function player_motion:internal/launch/cleanup",
+                "execute as @e[type=!minecraft:player,tag=player_motion.restore_invulnerable] run function player_motion:internal/launch/restore_invulnerable",
+            ],
+        )
+
+        cleanup_path = (
+            PACK
+            / "data/player_motion/function/internal/launch/cleanup.mcfunction"
+        )
+        self.assertTrue(cleanup_path.is_file(), "launch cleanup must exist")
+        cleanup = [
+            line
+            for line in cleanup_path.read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#")
+        ]
+        self.assertEqual(
+            cleanup,
+            [
+                "scoreboard players reset @s PlayerMotion.X",
+                "scoreboard players reset @s PlayerMotion.Y",
+                "scoreboard players reset @s PlayerMotion.Z",
+                "tag @s remove player_motion.pending",
+            ],
+        )
+
+    def test_old_api_removed(self):
+        api = PACK / "data/player_motion/function/api"
+        self.assertFalse((api / "launch_xyz.mcfunction").exists())
+        self.assertFalse((api / "launch_looking.mcfunction").exists())
+        public_runtime = all_mcfunctions() + read("README.md")
+        for obsolete in (
+            "$function_called",
+            "player_motion.launch",
+            "player_motion.api.launch",
+        ):
+            self.assertNotIn(obsolete, public_runtime)
+
     def test_fixed_point_saturation(self):
         path = PACK / "data/player_motion/function/api/accumulate.mcfunction"
         self.assertTrue(path.is_file(), "api/accumulate.mcfunction must exist")

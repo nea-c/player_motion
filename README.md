@@ -13,25 +13,23 @@ Credit to [@SuperSwordTW](https://github.com/SuperSwordTW) for helping make sign
 
 ## How to use
 
-### Launching a player where in a specific direction
+### Launching a player in its facing direction
 
 ```mcfunction
-scoreboard players set $strength player_motion.api.launch 10000
-function player_motion:api/launch_looking
+data modify storage player_motion: in set value {z:1.0,is_looking:true}
+function #player_motion:
 ```
-- `$strength` represents motion in blocks/tick, scaled by 10000. A strength of 10000 will push the player at 1 block/tick
+- `z` is motion in blocks per tick. A value of `1.0` requests one block per tick.
 - The facing direction in which the function is called is the direction the player will be launched
 - Only the player executing the command will receive a motion update
 
 ### Launching a player with xyz vector
 
 ```mcfunction
-scoreboard players set $x player_motion.api.launch 500
-scoreboard players set $y player_motion.api.launch 12000
-scoreboard players set $z player_motion.api.launch -3125
-function player_motion:api/launch_xyz
+data modify storage player_motion: in set value {x:0.05,y:1.2,z:-0.3125}
+function #player_motion:
 ```
-- `$x`, `$y`, and `$z` are the strength in blocks/tick to launch the player in the x, y, and z directions
+- `x`, `y`, and `z` are motion in blocks per tick along the global axes
 - As before, only the player executing the command will be launched
 
 *Note: These functions are *additive* and will apply motion in addition to existing motion rather than directly setting it to whatever input you send 
