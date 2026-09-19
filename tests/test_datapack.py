@@ -1,5 +1,7 @@
 import json
+import math
 import re
+import struct
 import unittest
 from pathlib import Path
 
@@ -23,6 +25,53 @@ def read_mcfunction_tree(relative: str) -> str:
         path.read_text(encoding="utf-8")
         for path in sorted((PACK / relative).rglob("*.mcfunction"))
     )
+
+
+def launch_geometry(vector, eye_height=1.62):
+    """Evaluate the arithmetic emitted by prepare, rounding each provider to float32."""
+    def f32(value):
+        return struct.unpack("f", struct.pack("f", value))[0]
+
+    values = dict(zip("xyz", map(f32, vector)))
+    values["eye_height"] = f32(eye_height)
+
+    def evaluate(provider):
+        if isinstance(provider, (int, float)):
+            return f32(provider)
+        kind = provider["type"].removeprefix("minecraft:")
+        if kind == "storage":
+            return values[provider["path"].removeprefix("_.launch.")]
+        if kind in ("add", "mul", "min", "max"):
+            inputs = list(map(evaluate, provider["inputs"]))
+            if kind == "add":
+                result = inputs[0]
+                for value in inputs[1:]:
+                    result = f32(result + value)
+            elif kind == "mul":
+                result = inputs[0]
+                for value in inputs[1:]:
+                    result = f32(result * value)
+            else:
+                result = (min if kind == "min" else max)(inputs)
+        elif kind in ("div", "sub"):
+            left, right = evaluate(provider["left"]), evaluate(provider["right"])
+            result = left / right if kind == "div" else left - right
+        else:
+            functions = {"sqrt": math.sqrt, "floor": math.floor, "ceil": math.ceil, "negate": lambda x: -x}
+            result = functions[kind](evaluate(provider["input"]))
+        return f32(result)
+
+    source = read("player_motion/data/player_motion/function/internal/launch/prepare.mcfunction")
+    for line in source.splitlines():
+        match = re.search(r"_\.launch\.(\w+) set compute default float (.+)$", line)
+        if not match:
+            continue
+        if line.startswith("execute if score #residual") and values["residual"] == 0:
+            continue
+        name, expression = match.groups()
+        expression = re.sub(r"([,{])([a-z_]+):", r'\1"\2":', expression)
+        values[name] = evaluate(json.loads(expression))
+    return values
 
 
 class DataPackContractTests(unittest.TestCase):
@@ -210,6 +259,82 @@ class DataPackContractTests(unittest.TestCase):
             self.assertIn(flag, state_line)
             self.assertIn('{type:"minecraft:entity_properties"', state_line)
             self.assertNotIn("{condition:", state_line)
+
+    def test_end_crystal_geometry(self):
+        launch = read_mcfunction_tree("data/player_motion/function/internal/launch")
+        summon = read_mcfunction_tree("data/player_motion/function/internal/summon")
+        for axis in "xyz":
+            self.assertRegex(
+                launch,
+                rf"store result storage player_motion: _\.launch\.{axis} float 0\.000001 run scoreboard players get @s PlayerMotion\.{axis.upper()}",
+            )
+        self.assertIn("compute default float", launch)
+        for provider in ("sqrt", "div", "floor", "min", "max"):
+            self.assertIn(f'type:"minecraft:{provider}"', launch)
+        for literal in ("0.8", "12.0", "_.launch.full_d", "_.launch.d"):
+            self.assertIn(literal, launch)
+        self.assertIn("#full_count PlayerMotion.X", launch + summon)
+        self.assertIn("summon end_crystal run damage @s 0", summon)
+        self.assertNotIn("player_motion.internal.", launch + summon)
+        self.assertNotIn('type:"minecraft:entity_eye_height"', launch)
+        main = read("player_motion/data/player_motion/function/internal/launch/main.mcfunction")
+        self.assertIn("matches 0 if score @s PlayerMotion.Y matches 0 if score @s PlayerMotion.Z matches 0 run return 0", main)
+        crystal = read("player_motion/data/player_motion/function/internal/summon/crystal.mcfunction")
+        self.assertIn("if score #residual PlayerMotion.X matches 1", crystal)
+
+    def test_explosion_location(self):
+        launch = read_mcfunction_tree("data/player_motion/function/internal/launch")
+        summon = read_mcfunction_tree("data/player_motion/function/internal/summon")
+        self.assertNotIn("in neac:", launch + summon)
+        path = PACK / "data/player_motion/function/internal/launch/apply.mcfunction"
+        self.assertTrue(path.is_file(), "apply.mcfunction must exist")
+        apply = path.read_text(encoding="utf-8")
+        for command in (
+            "tp ~ ~10000 ~",
+            "execute rotated as @s positioned ~ ~10000 ~ run function player_motion:internal/summon/main with storage player_motion: _.launch",
+            "tp ~ ~ ~",
+        ):
+            self.assertIn(command, apply)
+        self.assertLess(apply.index("tp ~ ~10000 ~"), apply.index("positioned ~ ~10000 ~"))
+        self.assertLess(apply.index("positioned ~ ~10000 ~"), apply.index("tp ~ ~ ~"))
+        for line in apply.splitlines():
+            if "run gamemode" in line or "run function player_motion:internal/launch/gamemode/" in line:
+                self.assertIn("if entity @s[type=minecraft:player]", line)
+        self.assertIn("store success score #resistance PlayerMotion.X", apply)
+        self.assertIn("if score #resistance PlayerMotion.X matches 1 run attribute", apply)
+        self.assertIn("-1 add_multiplied_total", apply)
+        self.assertIn("modifier remove player_motion:disable_knockback_resistance", apply)
+
+    def test_crystal_distances_match_falloff_and_direction(self):
+        # Vertical fixtures have no trigonometry: distance is eye height +/- falloff.
+        for vector, count, residual, distance in (
+            ((0, 0.4, 0), 0, 0.4, -8.82),
+            ((0, -0.4, 0), 0, 0.4, -5.58),
+            ((0, 1.6, 0), 2, 0, None),
+            ((0.8, 0, 0), 1, 0, None),
+        ):
+            with self.subTest(vector=vector):
+                result = launch_geometry(vector)
+                self.assertEqual(result["full_count"], count)
+                self.assertAlmostEqual(result["residual"], residual, places=6)
+                if distance is not None:
+                    self.assertAlmostEqual(result["d"], distance, places=5)
+                else:
+                    self.assertNotIn("q", result, "zero residual must skip its divisions")
+
+        # The crystal lies on the negative desired direction from the eyes,
+        # while its distance from the feet determines explosion falloff.
+        for vector in ((0.3, 0.4, 0), (-0.3, -0.4, 0.2), (1e-6, 0, 0), (1024, -1024, 1024)):
+            for eye_height in (0.4, 1.27, 1.62):
+                with self.subTest(vector=vector, eye_height=eye_height):
+                    result = launch_geometry(vector, eye_height)
+                    self.assertTrue(all(map(math.isfinite, result.values())))
+                    for key, power in (("full_d", 0.8), ("d", result["residual"])):
+                        if key not in result:
+                            continue
+                        d = result[key]
+                        feet_distance = math.hypot(d * result["unit_horizontal"], eye_height + d * result["unit_y"])
+                        self.assertAlmostEqual(feet_distance, (1 - power) * 12, places=4)
 
     def test_fixed_point_saturation(self):
         path = PACK / "data/player_motion/function/api/accumulate.mcfunction"
