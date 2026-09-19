@@ -336,6 +336,85 @@ class DataPackContractTests(unittest.TestCase):
                         feet_distance = math.hypot(d * result["unit_horizontal"], eye_height + d * result["unit_y"])
                         self.assertAlmostEqual(feet_distance, (1 - power) * 12, places=4)
 
+    def test_nonplayer_protection_and_clipped_motion_compensation(self):
+        directory = PACK / "data/player_motion/function/internal/launch"
+        path = directory / "protect.mcfunction"
+        self.assertTrue(path.is_file(), "nonplayer protection helper must exist")
+        protect = path.read_text(encoding="utf-8")
+        main = (directory / "main.mcfunction").read_text(encoding="utf-8")
+        player_guard = "execute if entity @s[type=minecraft:player] run return 0"
+        original_guard = "execute if entity @s[nbt={Invulnerable:1b}] run return 0"
+        before = "data modify storage player_motion: _.launch.before set from entity @s Motion"
+        enable = "execute store success score #protected PlayerMotion.X run data modify entity @s Invulnerable set value 1b"
+        success_guard = "execute unless score #protected PlayerMotion.X matches 1 run return 0"
+        mark = "tag @s add player_motion.restore_invulnerable"
+        after = "data modify storage player_motion: _.launch.after set from entity @s Motion"
+        order = (player_guard, original_guard, before, enable, success_guard, mark, after)
+        for command in order:
+            self.assertIn(command, protect)
+        for first, second in zip(order, order[1:]):
+            self.assertLess(protect.index(first), protect.index(second))
+        self.assertIn("execute unless entity @s[type=minecraft:player] run function player_motion:internal/launch/protect", main)
+        self.assertLess(main.index("internal/launch/protect"), main.index("internal/launch/prepare"))
+        self.assertIn("execute unless entity @s[type=minecraft:player] unless entity @s[nbt={Invulnerable:1b}] run return 0", main)
+        self.assertIn("execute if score #magnitude PlayerMotion.X matches 1 run function player_motion:internal/launch/apply", main)
+        self.assertGreater(main.index("internal/launch/restore_invulnerable"), main.index("internal/launch/apply"))
+
+        def evaluate(value, values):
+            if value["type"] == "minecraft:storage":
+                return values[value["path"]]
+            if value["type"] == "minecraft:add":
+                return sum(evaluate(x, values) for x in value["inputs"])
+            self.assertEqual(value["type"], "minecraft:sub")
+            return evaluate(value["left"], values) - evaluate(value["right"], values)
+
+        # The clipped components are recovered; an unchanged component is not doubled.
+        for axis, index, requested, before_value, after_value, expected in (
+            ("x", 0, 1, 16, 0, 17),
+            ("y", 1, 2, -12, 0, -10),
+            ("z", 2, 3, 0.25, 0.25, 3),
+        ):
+            line = next(line for line in protect.splitlines() if f"_.launch.{axis} set compute" in line)
+            expression = line.split("compute default float ", 1)[1]
+            expression = json.loads(re.sub(r"([,{])([a-z_]+):", r'\1"\2":', expression))
+            values = {f"_.launch.{axis}": requested, f"_.launch.before[{index}]": before_value, f"_.launch.after[{index}]": after_value}
+            self.assertEqual(evaluate(expression, values), expected)
+
+        prepare = (directory / "prepare.mcfunction").read_text(encoding="utf-8")
+        zero_guard = "execute if score #magnitude PlayerMotion.X matches 0 run return 0"
+        self.assertIn(zero_guard, prepare)
+        self.assertLess(prepare.index(zero_guard), prepare.index('type:"minecraft:div"'))
+
+    def test_restore_invulnerable_waits_for_exact_safe_motion(self):
+        path = PACK / "data/player_motion/function/internal/launch/restore_invulnerable.mcfunction"
+        self.assertTrue(path.is_file(), "deferred restoration helper must exist")
+        restore = path.read_text(encoding="utf-8")
+        lines = [line for line in restore.splitlines() if line and not line.startswith("#")]
+        self.assertEqual(lines[:2], [
+            "execute if entity @s[type=minecraft:player] run return 0",
+            "execute unless entity @s[tag=player_motion.restore_invulnerable] run return 0",
+        ])
+        probes = []
+        for i, line in enumerate(lines):
+            match = re.fullmatch(r"execute store result score #restore_motion PlayerMotion.X run data get entity @s Motion\[([012])\] (-?1)", line)
+            if match:
+                probes.append(tuple(map(int, match.groups())))
+                self.assertEqual(lines[i + 1], "execute unless score #restore_motion PlayerMotion.X matches -10..10 run return 0")
+        self.assertEqual(probes, [(0, 1), (0, -1), (1, 1), (1, -1), (2, 1), (2, -1)])
+        write = "execute store success score #restored PlayerMotion.X run data modify entity @s Invulnerable set value 0b"
+        remove = "execute if score #restored PlayerMotion.X matches 1 run tag @s remove player_motion.restore_invulnerable"
+        self.assertEqual(lines[-2:], [write, remove])
+        # Dual floor probes distinguish adjacent doubles outside +/-10 from the
+        # inclusive endpoints, unlike a float32 safety check that rounds to 10.
+        for motion, expected in (
+            ((10, -10, 0), True), ((0, 0, 0), True),
+            ((math.nextafter(10, math.inf), 0, 0), False),
+            ((0, math.nextafter(-10, -math.inf), 0), False),
+            ((0, 0, 1024), False), ((0, 0, -1024), False),
+        ):
+            with self.subTest(motion=motion):
+                self.assertEqual(all(-10 <= math.floor(motion[axis] * scale) <= 10 for axis, scale in probes), expected)
+
     def test_fixed_point_saturation(self):
         path = PACK / "data/player_motion/function/api/accumulate.mcfunction"
         self.assertTrue(path.is_file(), "api/accumulate.mcfunction must exist")
