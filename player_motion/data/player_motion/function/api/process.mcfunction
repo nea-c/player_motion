@@ -18,3 +18,13 @@ function player_motion:internal/rotation/capture_target
 # Match ImpulseMotion's resistance order when both flags are enabled.
 execute if data storage player_motion: _.in{is_explosion:true} run function player_motion:api/resistance/explosion
 execute if data storage player_motion: _.in{is_knockback:true} run function player_motion:api/resistance/knockback
+
+# Apply target-state multipliers only to this call in target-local coordinates.
+function player_motion:api/transform/global_to_target
+execute if predicate {condition:"minecraft:entity_properties",entity:"this",predicate:{flags:{is_in_water:true}}} run function player_motion:api/multiplier/in_water
+execute if predicate {condition:"minecraft:entity_properties",entity:"this",predicate:{flags:{is_fall_flying:true}}} run function player_motion:api/multiplier/elytra
+execute if predicate {condition:"minecraft:entity_properties",entity:"this",predicate:{flags:{is_swimming:true}}} run function player_motion:api/multiplier/swim
+function player_motion:api/transform/target_to_global
+
+# Append the bounded six-decimal delta to this target's queued motion.
+function player_motion:api/accumulate

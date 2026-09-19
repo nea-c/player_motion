@@ -127,6 +127,121 @@ class DataPackContractTests(unittest.TestCase):
         self.assertIn("_.target.z", transforms)
         self.assertIn("in neac: as 1604-1604-1604-1604-1604", capture)
 
+    def test_current_call_multipliers(self):
+        multiplier_path = PACK / "data/player_motion/function/api/multiplier"
+        functions = {}
+        for state in ("in_water", "elytra", "swim"):
+            path = multiplier_path / f"{state}.mcfunction"
+            self.assertTrue(path.is_file(), f"multiplier/{state}.mcfunction must exist")
+            functions[state] = path.read_text(encoding="utf-8")
+
+        water = functions["in_water"]
+        self.assertIn("_.in.multiplier.in_water", water)
+        water_targets = re.findall(
+            r"data modify storage player_motion: _\.target\.([xyz]) set compute",
+            water,
+        )
+        self.assertEqual(water_targets, ["x", "y", "z"])
+        for axis in "xyz":
+            component_line = next(
+                line
+                for line in water.splitlines()
+                if f"_.target.{axis} set compute" in line
+            )
+            self.assertIn(f'path:"_.target.{axis}"', component_line)
+            self.assertIn('path:"_.in.multiplier.in_water"', component_line)
+
+        for state in ("elytra", "swim"):
+            body = functions[state]
+            self.assertIn(f"_.in.multiplier.{state}", body)
+            self.assertIn("_.target.z", body)
+            self.assertIn('type:"minecraft:sign"', body)
+            self.assertRegex(body, r"matches 1(?:\.\.)? run data modify")
+            local_targets = re.findall(
+                r"data modify storage player_motion: _\.target\.([xyz]) set compute",
+                body,
+            )
+            self.assertEqual(local_targets, ["z"])
+            update_line = next(
+                line for line in body.splitlines() if "_.target.z set compute" in line
+            )
+            self.assertIn('path:"_.target.z"', update_line)
+            self.assertIn(f'path:"_.in.multiplier.{state}"', update_line)
+            self.assertNotIn("@s PlayerMotion.", body)
+
+        process = read("player_motion/data/player_motion/function/api/process.mcfunction")
+        pipeline = (
+            "function player_motion:api/transform/global_to_target",
+            "function player_motion:api/multiplier/in_water",
+            "function player_motion:api/multiplier/elytra",
+            "function player_motion:api/multiplier/swim",
+            "function player_motion:api/transform/target_to_global",
+            "function player_motion:api/accumulate",
+        )
+        for call in pipeline:
+            self.assertIn(call, process)
+        for before, after in zip(pipeline, pipeline[1:]):
+            self.assertLess(process.index(before), process.index(after))
+        state_flags = {
+            "in_water": "is_in_water:true",
+            "elytra": "is_fall_flying:true",
+            "swim": "is_swimming:true",
+        }
+        for state, flag in state_flags.items():
+            state_line = next(
+                line
+                for line in process.splitlines()
+                if f"function player_motion:api/multiplier/{state}" in line
+            )
+            self.assertIn(flag, state_line)
+
+    def test_fixed_point_saturation(self):
+        path = PACK / "data/player_motion/function/api/accumulate.mcfunction"
+        self.assertTrue(path.is_file(), "api/accumulate.mcfunction must exist")
+        accumulate = path.read_text(encoding="utf-8")
+
+        for literal in ("1000000", "1024000000", "-1024000000"):
+            self.assertIn(literal, accumulate)
+        for axis, objective in (("x", "X"), ("y", "Y"), ("z", "Z")):
+            store = (
+                f"execute store result score #delta PlayerMotion.{objective} "
+                "run compute default float"
+            )
+            add = (
+                f"scoreboard players operation @s PlayerMotion.{objective} "
+                f"+= #delta PlayerMotion.{objective}"
+            )
+            upper = (
+                f"execute if score @s PlayerMotion.{objective} matches 1024000001.. "
+                f"run scoreboard players set @s PlayerMotion.{objective} 1024000000"
+            )
+            lower = (
+                f"execute if score @s PlayerMotion.{objective} matches ..-1024000001 "
+                f"run scoreboard players set @s PlayerMotion.{objective} -1024000000"
+            )
+            self.assertIn(store, accumulate)
+            component_line = next(line for line in accumulate.splitlines() if store in line)
+            self.assertIn(f'path:"_.calc.{axis}"', component_line)
+            self.assertIn('type:"minecraft:min"', component_line)
+            self.assertIn('type:"minecraft:max"', component_line)
+            self.assertIn('type:"minecraft:round"', component_line)
+            for literal in ("-1024.0", "1024.0", "1000000.0"):
+                self.assertIn(literal, component_line)
+            self.assertLess(accumulate.index(store), accumulate.index(add))
+            self.assertLess(accumulate.index(add), accumulate.index(upper))
+            self.assertLess(accumulate.index(add), accumulate.index(lower))
+            self.assertIn(upper, accumulate)
+            self.assertIn(lower, accumulate)
+
+        queue_commands = re.findall(
+            r"^tag @s add \S+", accumulate, re.MULTILINE
+        )
+        self.assertEqual(queue_commands, ["tag @s add player_motion.pending"])
+        self.assertGreater(
+            accumulate.index("tag @s add player_motion.pending"),
+            accumulate.index("..-1024000001"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
