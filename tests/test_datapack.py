@@ -86,6 +86,7 @@ class DataPackContractTests(unittest.TestCase):
             "float precision", "Invulnerable", "±10",
             "dimensions containing players",
             "passenger tree", "independent Motion",
+            "every nonplayer passenger", "skipped before",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, readme)
@@ -450,24 +451,48 @@ class DataPackContractTests(unittest.TestCase):
         self.assertIn("Invulnerable set value 1b", nonplayer)
         self.assertIn("matches 1 run tag @s add player_motion.restore_invulnerable", nonplayer)
         self.assertNotIn("_.launch", nonplayer, "passenger motion must not change the root launch vector")
-        self.assertIn("player_motion:passenger_resistance 1 add_value", protect)
-        self.assertIn("matches 1 run tag @s add player_motion.passenger_resistance", protect)
+        resistance = (directory / "resistance.mcfunction").read_text(encoding="utf-8")
+        self.assertIn("player_motion:passenger_resistance 1 add_value", resistance)
+        self.assertIn("matches 1 run tag @s add player_motion.passenger_resistance", resistance)
         self.assertIn("modifier remove player_motion:passenger_resistance", restore)
         self.assertIn("function player_motion:internal/launch/restore_invulnerable", restore)
-        self.assertIn("unless score #passenger_has_resistance PlayerMotion.X matches 1 run tag @s add player_motion.passenger_clear_motion", protect)
-        self.assertIn("tag=player_motion.passenger_clear_motion] run data modify entity @s Motion set value [0.0d,0.0d,0.0d]", restore)
-        self.assertIn("tag @s remove player_motion.passenger_clear_motion", restore)
+        self.assertIn("if score #passenger_launched PlayerMotion.X matches 1 unless entity @s[type=minecraft:player] run data modify entity @s Motion set value [0.0d,0.0d,0.0d]", restore)
         for mode in ("survival", "adventure"):
             self.assertIn(f"gamemode={mode}] run tag @s add player_motion.passenger_{mode}", protect)
             self.assertIn(f"tag=player_motion.passenger_{mode}] run gamemode creative @s", protect)
             self.assertIn(f"tag=player_motion.passenger_{mode}] run gamemode {mode} @s", restore)
             self.assertIn(f"tag @s remove player_motion.passenger_{mode}", restore)
-        apply = read("player_motion/data/player_motion/function/internal/launch/apply.mcfunction")
+        main = read("player_motion/data/player_motion/function/internal/launch/main.mcfunction")
         before = "execute on passengers run function player_motion:internal/launch/passenger/protect_tree"
         after = "execute on passengers run function player_motion:internal/launch/passenger/restore_tree"
-        self.assertLess(apply.index(before), apply.index("tp ~ ~10000 ~"))
-        self.assertGreater(apply.rindex(after), apply.index("tp ~ ~ ~"))
-        self.assertIn("if score #passenger_failed PlayerMotion.X matches 1 run return 0", apply)
+        self.assertLess(main.index(before), main.index("run function player_motion:internal/launch/protect"))
+        self.assertGreater(main.rindex(after), main.index("run function player_motion:internal/launch/apply"))
+        self.assertIn("if score #passenger_failed PlayerMotion.X matches 1 run return 0", main)
+
+    def test_passenger_effective_resistance_preflight(self):
+        directory = PACK / "data/player_motion/function/internal/launch/passenger"
+        preflight = directory / "prepare_tree.mcfunction"
+        self.assertTrue(preflight.is_file(), "resistance must be checked before root or rider protection mutates entity state")
+        prepare = preflight.read_text(encoding="utf-8")
+        resistance = (directory / "resistance.mcfunction").read_text(encoding="utf-8")
+        boost = (directory / "boost.mcfunction").read_text(encoding="utf-8")
+        restore = (directory / "restore_tree.mcfunction").read_text(encoding="utf-8")
+        main = read("player_motion/data/player_motion/function/internal/launch/main.mcfunction")
+        apply = read("player_motion/data/player_motion/function/internal/launch/apply.mcfunction")
+        self.assertIn("execute on passengers run function player_motion:internal/launch/passenger/prepare_tree", prepare)
+        self.assertNotIn("data modify entity", prepare + resistance)
+        exact_probe = "execute store result score #passenger_effective PlayerMotion.X run attribute @s minecraft:explosion_knockback_resistance get"
+        self.assertIn(exact_probe, resistance)
+        self.assertGreater(resistance.rindex(exact_probe), resistance.index("function player_motion:internal/launch/passenger/prepare_boost"))
+        self.assertIn("unless score #passenger_effective PlayerMotion.X matches 1 run scoreboard players set #passenger_failed PlayerMotion.X 1", resistance)
+        self.assertIn("player_motion:passenger_resistance_boost $(boost) add_multiplied_total", boost)
+        self.assertIn("modifier remove player_motion:passenger_resistance_boost", restore)
+        self.assertIn("tag @s remove player_motion.passenger_resistance_boost", restore)
+        abort = "execute if score #passenger_failed PlayerMotion.X matches 1 run return 0"
+        self.assertLess(main.index(abort), main.index("run function player_motion:internal/launch/protect"))
+        self.assertLess(main.index(abort), main.index("on passengers run function player_motion:internal/launch/passenger/protect_tree"))
+        self.assertIn("scoreboard players set #passenger_launched PlayerMotion.X 0", main)
+        self.assertLess(apply.index("scoreboard players set #passenger_launched PlayerMotion.X 1"), apply.index("tp ~ ~10000 ~"))
 
     def test_tick_flush_and_cleanup(self):
         tick = read(
