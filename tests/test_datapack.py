@@ -75,9 +75,32 @@ def launch_geometry(vector, eye_height=1.62):
 
 
 class DataPackContractTests(unittest.TestCase):
+    def test_readme_documents_new_api(self):
+        readme = read("README.md")
+        for required in (
+            "storage player_motion: in", "function #player_motion:",
+            "x:", "y:", "z:", "is_looking", "is_vehicle_execution",
+            "is_knockback", "is_explosion", "multiplier",
+            "elytra:0.5", "swim:0.5", "in_water:1.5",
+            "0.000001", "±1024", "same-tick", "Y+10000",
+            "float precision", "Invulnerable", "±10",
+            "dimensions containing players",
+            "passenger tree", "independent Motion",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, readme)
+        for obsolete in ("player_motion:api/launch_xyz", "player_motion:api/launch_looking"):
+            self.assertNotIn(obsolete, readme)
+
     def test_pack_targets_26_3(self):
         metadata = json.loads(read("player_motion/pack.mcmeta"))
         self.assertEqual(metadata["pack"]["pack_format"], 121)
+        self.assertEqual(metadata["pack"].get("min_format"), 121)
+        self.assertEqual(metadata["pack"].get("max_format"), 121)
+
+    def test_helper_dimension_satisfies_26_3_registry(self):
+        dimension_type = json.loads(read("player_motion/data/neac/dimension_type/void.json"))
+        self.assertIs(dimension_type.get("has_ender_dragon_fight"), False)
 
     def test_public_tag_points_to_call(self):
         tag = json.loads(read("player_motion/data/player_motion/tags/function/.json"))
@@ -415,6 +438,37 @@ class DataPackContractTests(unittest.TestCase):
             with self.subTest(motion=motion):
                 self.assertEqual(all(-10 <= math.floor(motion[axis] * scale) <= 10 for axis, scale in probes), expected)
 
+    def test_passenger_tree_protection(self):
+        directory = PACK / "data/player_motion/function/internal/launch/passenger"
+        self.assertTrue(directory.is_dir(), "passengers need scoped protection before the root is teleported")
+        protect = (directory / "protect_tree.mcfunction").read_text(encoding="utf-8")
+        restore = (directory / "restore_tree.mcfunction").read_text(encoding="utf-8")
+        nonplayer = (directory / "protect_nonplayer.mcfunction").read_text(encoding="utf-8")
+        self.assertIn("execute on passengers run function player_motion:internal/launch/passenger/protect_tree", protect)
+        self.assertIn("execute on passengers run function player_motion:internal/launch/passenger/restore_tree", restore)
+        self.assertIn("@s[nbt={Invulnerable:1b}] run return 0", nonplayer)
+        self.assertIn("Invulnerable set value 1b", nonplayer)
+        self.assertIn("matches 1 run tag @s add player_motion.restore_invulnerable", nonplayer)
+        self.assertNotIn("_.launch", nonplayer, "passenger motion must not change the root launch vector")
+        self.assertIn("player_motion:passenger_resistance 1 add_value", protect)
+        self.assertIn("matches 1 run tag @s add player_motion.passenger_resistance", protect)
+        self.assertIn("modifier remove player_motion:passenger_resistance", restore)
+        self.assertIn("function player_motion:internal/launch/restore_invulnerable", restore)
+        self.assertIn("unless score #passenger_has_resistance PlayerMotion.X matches 1 run tag @s add player_motion.passenger_clear_motion", protect)
+        self.assertIn("tag=player_motion.passenger_clear_motion] run data modify entity @s Motion set value [0.0d,0.0d,0.0d]", restore)
+        self.assertIn("tag @s remove player_motion.passenger_clear_motion", restore)
+        for mode in ("survival", "adventure"):
+            self.assertIn(f"gamemode={mode}] run tag @s add player_motion.passenger_{mode}", protect)
+            self.assertIn(f"tag=player_motion.passenger_{mode}] run gamemode creative @s", protect)
+            self.assertIn(f"tag=player_motion.passenger_{mode}] run gamemode {mode} @s", restore)
+            self.assertIn(f"tag @s remove player_motion.passenger_{mode}", restore)
+        apply = read("player_motion/data/player_motion/function/internal/launch/apply.mcfunction")
+        before = "execute on passengers run function player_motion:internal/launch/passenger/protect_tree"
+        after = "execute on passengers run function player_motion:internal/launch/passenger/restore_tree"
+        self.assertLess(apply.index(before), apply.index("tp ~ ~10000 ~"))
+        self.assertGreater(apply.rindex(after), apply.index("tp ~ ~ ~"))
+        self.assertIn("if score #passenger_failed PlayerMotion.X matches 1 run return 0", apply)
+
     def test_tick_flush_and_cleanup(self):
         tick = read(
             "player_motion/data/player_motion/function/internal/technical/"
@@ -445,9 +499,9 @@ class DataPackContractTests(unittest.TestCase):
         self.assertEqual(
             flush_commands,
             [
-                "execute as @e[tag=player_motion.pending] at @s run function player_motion:internal/launch/main",
-                "execute as @e[tag=player_motion.pending] at @s run function player_motion:internal/launch/cleanup",
-                "execute as @e[type=!minecraft:player,tag=player_motion.restore_invulnerable] run function player_motion:internal/launch/restore_invulnerable",
+                "execute as @e[tag=player_motion.pending,distance=0..] at @s run function player_motion:internal/launch/main",
+                "execute as @e[tag=player_motion.pending,distance=0..] at @s run function player_motion:internal/launch/cleanup",
+                "execute as @e[type=!minecraft:player,tag=player_motion.restore_invulnerable,distance=0..] run function player_motion:internal/launch/restore_invulnerable",
             ],
         )
 
