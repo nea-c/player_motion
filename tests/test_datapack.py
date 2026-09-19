@@ -550,6 +550,42 @@ class DataPackContractTests(unittest.TestCase):
             ],
         )
 
+    def test_flush_revalidates_current_player_eligibility_before_mutation(self):
+        main = read(
+            "player_motion/data/player_motion/function/internal/launch/"
+            "main.mcfunction"
+        )
+        commands = [
+            line
+            for line in main.splitlines()
+            if line and not line.startswith("#")
+        ]
+        guards = [
+            "execute if entity @s[type=minecraft:player,gamemode=spectator] run return 0",
+            "execute if entity @s[type=minecraft:player,gamemode=creative] if predicate {type:\"minecraft:entity_properties\",entity:\"this\",predicate:{flags:{is_flying:true,is_fall_flying:false}}} run return 0",
+            "execute if entity @s[type=minecraft:player] on vehicle run return 0",
+        ]
+        self.assertEqual(
+            commands[:3],
+            guards,
+            "flush-time player guards must run before launch storage, protection, "
+            "gamemode, position, or passenger state can change",
+        )
+        self.assertTrue(
+            all("type=minecraft:player" in guard for guard in guards),
+            "current-player guards must not reject root vehicle targets",
+        )
+
+        flush = read(
+            "player_motion/data/player_motion/function/internal/technical/"
+            "flush_dimension.mcfunction"
+        )
+        self.assertLess(
+            flush.index("run function player_motion:internal/launch/main"),
+            flush.index("run function player_motion:internal/launch/cleanup"),
+            "the wrapper must clean queued scores/tags even when launch returns early",
+        )
+
     def test_old_api_removed(self):
         api = PACK / "data/player_motion/function/api"
         self.assertFalse((api / "launch_xyz.mcfunction").exists())

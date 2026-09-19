@@ -1,3 +1,10 @@
+# Revalidate player-only eligibility at flush time before mutating any launch,
+# protection, gamemode, passenger, or position state. Queue cleanup is owned by
+# the unconditional flush wrapper and still runs after these early returns.
+execute if entity @s[type=minecraft:player,gamemode=spectator] run return 0
+execute if entity @s[type=minecraft:player,gamemode=creative] if predicate {type:"minecraft:entity_properties",entity:"this",predicate:{flags:{is_flying:true,is_fall_flying:false}}} run return 0
+execute if entity @s[type=minecraft:player] on vehicle run return 0
+
 # Consume the saturated global vector. Tick owns pending-tag/score cleanup.
 data modify storage player_motion: _.launch set value {}
 execute store result storage player_motion: _.launch.x float 0.000001 run scoreboard players get @s PlayerMotion.X
