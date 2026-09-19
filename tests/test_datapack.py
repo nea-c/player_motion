@@ -155,7 +155,21 @@ class DataPackContractTests(unittest.TestCase):
             body = functions[state]
             self.assertIn(f"_.in.multiplier.{state}", body)
             self.assertIn("_.target.z", body)
-            self.assertIn('type:"minecraft:sign"', body)
+            self.assertNotIn('type:"minecraft:sign"', body)
+            self.assertIn(
+                "execute store result score #positive PlayerMotion.Z", body
+            )
+            gate_line = next(
+                line
+                for line in body.splitlines()
+                if "execute store result score #positive PlayerMotion.Z" in line
+            )
+            self.assertIn('type:"minecraft:ceil"', gate_line)
+            self.assertIn('type:"minecraft:min"', gate_line)
+            self.assertIn('type:"minecraft:max"', gate_line)
+            self.assertIn('path:"_.target.z"', gate_line)
+            self.assertIn("0.0", gate_line)
+            self.assertIn("1.0", gate_line)
             self.assertRegex(body, r"matches 1(?:\.\.)? run data modify")
             local_targets = re.findall(
                 r"data modify storage player_motion: _\.target\.([xyz]) set compute",
@@ -194,6 +208,8 @@ class DataPackContractTests(unittest.TestCase):
                 if f"function player_motion:api/multiplier/{state}" in line
             )
             self.assertIn(flag, state_line)
+            self.assertIn('{type:"minecraft:entity_properties"', state_line)
+            self.assertNotIn("{condition:", state_line)
 
     def test_fixed_point_saturation(self):
         path = PACK / "data/player_motion/function/api/accumulate.mcfunction"
