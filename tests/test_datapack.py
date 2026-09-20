@@ -282,13 +282,6 @@ class DataPackContractTests(unittest.TestCase):
             {"#", "#passenger_failed", "#passenger_launched"},
         )
 
-        for state in ("elytra", "swim"):
-            body = read(
-                "player_motion/data/player_motion/function/accumulate/"
-                f"multiplier/{state}.mcfunction"
-            )
-            self.assertIn("scoreboard players reset # PlayerMotion.Z", body)
-
         accumulate = read(
             "player_motion/data/player_motion/function/accumulate/5.score.mcfunction"
         )
@@ -464,22 +457,17 @@ class DataPackContractTests(unittest.TestCase):
             body = functions[state]
             self.assertIn(f"_.in.multiplier.{state}", body)
             self.assertIn("_.target.z", body)
-            self.assertNotIn('type:"sign"', body)
-            self.assertIn(
-                "execute store result score # PlayerMotion.Z", body
-            )
+            self.assertNotIn("scoreboard players", body)
             gate_line = next(
                 line
                 for line in body.splitlines()
-                if "execute store result score # PlayerMotion.Z" in line
+                if "execute unless predicate" in line
             )
-            self.assertIn('type:"ceil"', gate_line)
-            self.assertIn('type:"min"', gate_line)
-            self.assertIn('type:"max"', gate_line)
+            self.assertIn('type:"float_value_check"', gate_line)
+            self.assertIn('type:"storage"', gate_line)
             self.assertIn('path:"_.target.z"', gate_line)
-            self.assertIn("0.0", gate_line)
-            self.assertIn("1.0", gate_line)
-            self.assertRegex(body, r"matches 1(?:\.\.)? run data modify")
+            self.assertIn('test:{max:0.0f}', gate_line)
+            self.assertIn("run data modify", gate_line)
             local_targets = re.findall(
                 r"data modify storage player_motion: _\.target\.([xyz]) set compute",
                 body,
