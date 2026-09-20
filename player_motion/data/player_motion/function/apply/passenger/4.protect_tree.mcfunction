@@ -3,7 +3,7 @@ execute if entity @s[type=player,gamemode=survival] run tag @s add player_motion
 execute if entity @s[type=player,gamemode=adventure] run tag @s add player_motion.passenger_adventure
 execute if entity @s[type=player,tag=player_motion.passenger_survival] run gamemode creative @s
 execute if entity @s[type=player,tag=player_motion.passenger_adventure] run gamemode creative @s
-execute if entity @s[type=player,gamemode=!creative,gamemode=!spectator] run scoreboard players set #passenger_failed PlayerMotion.X 1
+execute if entity @s[type=player,gamemode=!creative,gamemode=!spectator] run scoreboard players set #player_motion.passenger_failed PlayerMotion.X 1
 execute unless entity @s[type=player] run function player_motion:apply/passenger/5.protect_nonplayer
 
 execute on passengers run function player_motion:apply/passenger/4.protect_tree

@@ -8,6 +8,6 @@ execute as @e[tag=player_motion.pending,distance=0..] at @s run function player_
 execute as @e[type=!player,tag=player_motion.restore_invulnerable,distance=0..] run function player_motion:apply/5.restore_invulnerable
 
 # Release global scratch registers after every launch/restoration pass.
-scoreboard players reset #
-scoreboard players reset #passenger_failed
-scoreboard players reset #passenger_launched
+scoreboard players reset #player_motion
+scoreboard players reset #player_motion.passenger_failed
+scoreboard players reset #player_motion.passenger_launched
