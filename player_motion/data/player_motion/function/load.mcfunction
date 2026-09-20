@@ -1,6 +1,5 @@
 #> player_motion:load
 
-data modify storage player_motion: _ set value {}
 
 scoreboard objectives add PlayerMotion.X dummy
 scoreboard objectives add PlayerMotion.Y dummy
