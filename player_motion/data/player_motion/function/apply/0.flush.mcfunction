@@ -1,5 +1,5 @@
 # Launch every pending target in this anchor's dimension, then unconditionally
-# clear its queue state. A return inside launch/main cannot skip the next pass.
+# clear its queue state. A return inside apply/1.launch cannot skip the next pass.
 # An unbounded @e is global; distance limits the queries to this dimension.
 execute as @e[tag=player_motion.pending,distance=0..] at @s run function player_motion:apply/1.launch
 execute as @e[tag=player_motion.pending,distance=0..] at @s run function player_motion:apply/6.cleanup

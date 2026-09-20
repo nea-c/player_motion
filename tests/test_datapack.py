@@ -229,6 +229,7 @@ class DataPackContractTests(unittest.TestCase):
         self.assertEqual(actual, EXPECTED_FUNCTIONS)
         self.assertFalse((function_root / "api").exists())
         self.assertFalse((function_root / "internal").exists())
+        self.assertNotIn("launch/main", all_mcfunctions())
 
     def test_numbered_root_entries(self):
         load_tag = json.loads(
