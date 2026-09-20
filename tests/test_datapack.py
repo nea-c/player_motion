@@ -293,6 +293,30 @@ class DataPackContractTests(unittest.TestCase):
         self.assertIn("_.target.z", transforms)
         self.assertIn("in neac: as 1604-1604-1604-1604-1604", capture)
 
+    def test_resistance_scales_private_input_before_rotation(self):
+        call = read("player_motion/data/player_motion/function/accumulate/1.call.mcfunction")
+        looking = "function player_motion:accumulate/3.looking"
+
+        for stage in ("2.explosion", "2.knockback"):
+            call_stage = f"function player_motion:accumulate/{stage}"
+            self.assertLess(call.index(call_stage), call.index(looking))
+
+            resistance = read(
+                "player_motion/data/player_motion/function/accumulate/"
+                f"{stage}.mcfunction"
+            )
+            for axis in "xyz":
+                update = (
+                    f"data modify storage player_motion: _.in.{axis} "
+                    "set compute default float"
+                )
+                self.assertIn(update, resistance)
+                line = next(
+                    line for line in resistance.splitlines() if update in line
+                )
+                self.assertIn(f'path:"_.in.{axis}"', line)
+                self.assertNotIn(f"_.calc.{axis} set compute", resistance)
+
     def test_current_call_multipliers(self):
         multiplier_path = PACK / "data/player_motion/function/accumulate/multiplier"
         functions = {}

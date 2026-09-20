@@ -3,6 +3,6 @@ data modify storage player_motion: _.resistance set value 0.0f
 execute store result storage player_motion: _.resistance float 0.000001 run attribute @s knockback_resistance get 1000000
 data modify storage player_motion: _.resistance set compute default float {type:"max",inputs:[{type:"sub",left:1.0,right:{type:"storage",storage:"player_motion:",path:"_.resistance"}},0.0]}
 
-data modify storage player_motion: _.calc.x set compute default float {type:"mul",inputs:[{type:"storage",storage:"player_motion:",path:"_.calc.x"},{type:"storage",storage:"player_motion:",path:"_.resistance"}]}
-data modify storage player_motion: _.calc.y set compute default float {type:"mul",inputs:[{type:"storage",storage:"player_motion:",path:"_.calc.y"},{type:"storage",storage:"player_motion:",path:"_.resistance"}]}
-data modify storage player_motion: _.calc.z set compute default float {type:"mul",inputs:[{type:"storage",storage:"player_motion:",path:"_.calc.z"},{type:"storage",storage:"player_motion:",path:"_.resistance"}]}
+data modify storage player_motion: _.in.x set compute default float {type:"mul",inputs:[{type:"storage",storage:"player_motion:",path:"_.in.x"},{type:"storage",storage:"player_motion:",path:"_.resistance"}]}
+data modify storage player_motion: _.in.y set compute default float {type:"mul",inputs:[{type:"storage",storage:"player_motion:",path:"_.in.y"},{type:"storage",storage:"player_motion:",path:"_.resistance"}]}
+data modify storage player_motion: _.in.z set compute default float {type:"mul",inputs:[{type:"storage",storage:"player_motion:",path:"_.in.z"},{type:"storage",storage:"player_motion:",path:"_.resistance"}]}
