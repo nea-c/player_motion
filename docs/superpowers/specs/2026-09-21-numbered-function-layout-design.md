@@ -58,7 +58,7 @@ accumulate/
 
 - `0` is the sole public function-tag target. It normalizes the input and captures the invocation rotation before delegating to `1.call`.
 - `1.call` validates the target, performs vehicle redirection, applies optional resistance processing, selects looking-relative or global input, and advances the call through motion conversion and score accumulation.
-- Both `2` functions apply their corresponding resistance without changing the behavior or order of the current API.
+- Both `2` functions apply their corresponding resistance before the optional `3.looking` transform, matching the visible numeric order and ImpulseMotion. Resistance is a uniform scalar, so the intended vector is unchanged; normal float-level rounding may differ because multiplication now occurs before rotation.
 - `3.looking` converts invocation-relative input into a global vector.
 - `4.motion_set` captures target rotation, converts the global vector into target-local coordinates, invokes applicable unnumbered multiplier helpers, and converts the result back to global coordinates.
 - `5.score` clamps, converts, saturates, and accumulates the six-decimal fixed-point score components, then adds `player_motion.pending`.
@@ -116,7 +116,7 @@ Every internal `function player_motion:...`, scheduled function, and macro funct
 
 ## Behavioral Constraints
 
-This change is structural only. It must preserve:
+This change is structural except for the explicitly documented resistance/rotation evaluation order. It must preserve:
 
 - all storage input fields and defaults;
 - exactly three scoreboard objectives;
