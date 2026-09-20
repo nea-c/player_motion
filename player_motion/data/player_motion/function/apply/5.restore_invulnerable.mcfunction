@@ -5,18 +5,12 @@ execute unless entity @s[tag=player_motion.restore_invulnerable] run return fail
 
 # Entity.load preserves Motion only within inclusive +/-10. Two exact double
 # floor probes avoid float rounding at the boundary; unsafe targets keep the tag.
-execute store result score #player_motion PlayerMotion.X run data get entity @s Motion[0] 1
-execute unless score #player_motion PlayerMotion.X matches -10..10 run return fail
-execute store result score #player_motion PlayerMotion.X run data get entity @s Motion[0] -1
-execute unless score #player_motion PlayerMotion.X matches -10..10 run return fail
-execute store result score #player_motion PlayerMotion.X run data get entity @s Motion[1] 1
-execute unless score #player_motion PlayerMotion.X matches -10..10 run return fail
-execute store result score #player_motion PlayerMotion.X run data get entity @s Motion[1] -1
-execute unless score #player_motion PlayerMotion.X matches -10..10 run return fail
-execute store result score #player_motion PlayerMotion.X run data get entity @s Motion[2] 1
-execute unless score #player_motion PlayerMotion.X matches -10..10 run return fail
-execute store result score #player_motion PlayerMotion.X run data get entity @s Motion[2] -1
-execute unless score #player_motion PlayerMotion.X matches -10..10 run return fail
+data modify storage player_motion: _.Motion set from entity @s Motion
+execute if predicate {type:"any_of",terms:[\
+  {type:"inverted",term:{type:"float_value_check",value:{type:"storage",storage:"player_motion:",path:"_.Motion[0]"},test:{min:-10,max:10}}},\
+  {type:"inverted",term:{type:"float_value_check",value:{type:"storage",storage:"player_motion:",path:"_.Motion[1]"},test:{min:-10,max:10}}},\
+  {type:"inverted",term:{type:"float_value_check",value:{type:"storage",storage:"player_motion:",path:"_.Motion[2]"},test:{min:-10,max:10}}},\
+]} run return fail
 
-execute store success score #player_motion PlayerMotion.X run data modify entity @s Invulnerable set value 0b
-execute if score #player_motion PlayerMotion.X matches 1 run tag @s remove player_motion.restore_invulnerable
+data modify entity @s Invulnerable set value 0b
+tag @s remove player_motion.restore_invulnerable
