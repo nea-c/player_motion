@@ -16,20 +16,20 @@ execute if score @s PlayerMotion.X matches 0 if score @s PlayerMotion.Y matches 
 # Preflight all riders before any NBT protection write can clip the root's existing Motion.
 scoreboard players set #passenger_failed PlayerMotion.X 0
 scoreboard players set #passenger_launched PlayerMotion.X 0
-execute on passengers run function player_motion:internal/launch/passenger/prepare_tree
-execute if score #passenger_failed PlayerMotion.X matches 1 on passengers run function player_motion:internal/launch/passenger/restore_tree
+execute on passengers run function player_motion:apply/passenger/0.prepare_tree
+execute if score #passenger_failed PlayerMotion.X matches 1 on passengers run function player_motion:apply/passenger/6.restore_tree
 execute if score #passenger_failed PlayerMotion.X matches 1 run return 0
-execute on passengers run function player_motion:internal/launch/passenger/protect_tree
-execute if score #passenger_failed PlayerMotion.X matches 1 on passengers run function player_motion:internal/launch/passenger/restore_tree
+execute on passengers run function player_motion:apply/passenger/4.protect_tree
+execute if score #passenger_failed PlayerMotion.X matches 1 on passengers run function player_motion:apply/passenger/6.restore_tree
 execute if score #passenger_failed PlayerMotion.X matches 1 run return 0
 
-execute unless entity @s[type=player] run function player_motion:internal/launch/protect
+execute unless entity @s[type=player] run function player_motion:apply/2.protect
 # Do not expose a nonplayer if enabling protection failed.
-execute unless entity @s[type=player] unless entity @s[nbt={Invulnerable:1b}] on passengers run function player_motion:internal/launch/passenger/restore_tree
+execute unless entity @s[type=player] unless entity @s[nbt={Invulnerable:1b}] on passengers run function player_motion:apply/passenger/6.restore_tree
 execute unless entity @s[type=player] unless entity @s[nbt={Invulnerable:1b}] run return 0
-function player_motion:internal/launch/prepare
-execute if score #magnitude PlayerMotion.X matches 1 run function player_motion:internal/launch/apply
-execute on passengers run function player_motion:internal/launch/passenger/restore_tree
+function player_motion:apply/3.prepare
+execute if score #magnitude PlayerMotion.X matches 1 run function player_motion:apply/4.apply
+execute on passengers run function player_motion:apply/passenger/6.restore_tree
 # A clipped-motion correction can cancel the requested impulse. Restore in that
 # case too; unsafe post-launch motion leaves the tag for the recurring tick.
-execute if entity @s[type=!player,tag=player_motion.restore_invulnerable] run function player_motion:internal/launch/restore_invulnerable
+execute if entity @s[type=!player,tag=player_motion.restore_invulnerable] run function player_motion:apply/5.restore_invulnerable

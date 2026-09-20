@@ -1,6 +1,6 @@
 {
   "values": [
     "neac:load",
-    "player_motion:internal/technical/load"
+    "player_motion:load"
   ]
 }
