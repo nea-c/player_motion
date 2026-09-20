@@ -155,7 +155,33 @@ class DataPackContractTests(unittest.TestCase):
 
     def test_public_tag_points_to_call(self):
         tag = json.loads(read("player_motion/data/player_motion/tags/function/.json"))
-        self.assertEqual(tag, {"values": ["player_motion:api/call"]})
+        self.assertEqual(tag, {"values": ["player_motion:accumulate/0"]})
+
+    def test_numbered_accumulation_tree(self):
+        function_root = PACK / "data/player_motion/function"
+        expected = {
+            "0.mcfunction",
+            "1.call.mcfunction",
+            "2.explosion.mcfunction",
+            "2.knockback.mcfunction",
+            "3.looking.mcfunction",
+            "4.motion_set.mcfunction",
+            "5.score.mcfunction",
+            "multiplier/elytra.mcfunction",
+            "multiplier/in_water.mcfunction",
+            "multiplier/swim.mcfunction",
+            "rotation/0.get.mcfunction",
+            "rotation/1.execution.mcfunction",
+            "rotation/2.target.mcfunction",
+        }
+        accumulate_root = function_root / "accumulate"
+        actual = {
+            path.relative_to(accumulate_root).as_posix()
+            for path in accumulate_root.rglob("*.mcfunction")
+        } if accumulate_root.exists() else set()
+        self.assertEqual(actual, expected)
+        self.assertFalse((function_root / "api").exists())
+        self.assertFalse((function_root / "internal/rotation").exists())
 
     def test_exactly_three_objectives_are_created(self):
         commands = all_mcfunctions()
@@ -188,18 +214,18 @@ class DataPackContractTests(unittest.TestCase):
         )
 
     def test_api_defaults_and_fields(self):
-        call_path = PACK / "data/player_motion/function/api/call.mcfunction"
-        self.assertTrue(call_path.is_file(), "api/call.mcfunction must exist")
+        call_path = PACK / "data/player_motion/function/accumulate/0.mcfunction"
+        self.assertTrue(call_path.is_file(), "accumulate/0.mcfunction must exist")
         for relative in (
-            "process.mcfunction",
-            "resistance/knockback.mcfunction",
-            "resistance/explosion.mcfunction",
+            "1.call.mcfunction",
+            "2.knockback.mcfunction",
+            "2.explosion.mcfunction",
         ):
             self.assertTrue(
-                (call_path.parent / relative).is_file(), f"api/{relative} must exist"
+                (call_path.parent / relative).is_file(), f"accumulate/{relative} must exist"
             )
-        call = read("player_motion/data/player_motion/function/api/call.mcfunction")
-        api = read_mcfunction_tree("data/player_motion/function/api")
+        call = read("player_motion/data/player_motion/function/accumulate/0.mcfunction")
+        api = read_mcfunction_tree("data/player_motion/function/accumulate")
 
         defaults = (
             "{x:0.0,y:0.0,z:0.0,is_looking:false,"
@@ -227,38 +253,35 @@ class DataPackContractTests(unittest.TestCase):
         self.assertIn("get 1000000", api)
         self.assertIn("float 0.000001", api)
         self.assertLess(
-            call.index("internal/rotation/capture_execution"),
-            call.index("api/process"),
+            call.index("accumulate/rotation/1.execution"),
+            call.index("accumulate/1.call"),
         )
 
     def test_rotation_and_float_transforms(self):
-        transform_path = PACK / "data/player_motion/function/api/transform"
         capture_path = (
             PACK
-            / "data/player_motion/function/internal/rotation/capture_execution.mcfunction"
+            / "data/player_motion/function/accumulate/rotation/1.execution.mcfunction"
         )
-        self.assertTrue(transform_path.is_dir(), "transform functions must exist")
         self.assertTrue(capture_path.is_file(), "capture_execution.mcfunction must exist")
-        for relative in (
-            "execution_to_global.mcfunction",
-            "global_to_target.mcfunction",
-            "target_to_global.mcfunction",
-        ):
+        for relative in ("3.looking.mcfunction", "4.motion_set.mcfunction"):
             self.assertTrue(
-                (transform_path / relative).is_file(),
-                f"transform/{relative} must exist",
+                (capture_path.parent.parent / relative).is_file(),
+                f"accumulate/{relative} must exist",
             )
-        for relative in ("capture_target.mcfunction", "get.mcfunction"):
+        for relative in ("2.target.mcfunction", "0.get.mcfunction"):
             self.assertTrue(
                 (capture_path.parent / relative).is_file(),
-                f"internal/rotation/{relative} must exist",
+                f"accumulate/rotation/{relative} must exist",
             )
-        transforms = read_mcfunction_tree(
-            "data/player_motion/function/api/transform"
+        transforms = "\n".join(
+            (
+                read("player_motion/data/player_motion/function/accumulate/3.looking.mcfunction"),
+                read("player_motion/data/player_motion/function/accumulate/4.motion_set.mcfunction"),
+            )
         )
         capture = read(
-            "player_motion/data/player_motion/function/internal/rotation/"
-            "capture_execution.mcfunction"
+            "player_motion/data/player_motion/function/accumulate/rotation/"
+            "1.execution.mcfunction"
         )
 
         self.assertIn("compute default float", transforms)
@@ -271,7 +294,7 @@ class DataPackContractTests(unittest.TestCase):
         self.assertIn("in neac: as 1604-1604-1604-1604-1604", capture)
 
     def test_current_call_multipliers(self):
-        multiplier_path = PACK / "data/player_motion/function/api/multiplier"
+        multiplier_path = PACK / "data/player_motion/function/accumulate/multiplier"
         functions = {}
         for state in ("in_water", "elytra", "swim"):
             path = multiplier_path / f"{state}.mcfunction"
@@ -326,14 +349,12 @@ class DataPackContractTests(unittest.TestCase):
             self.assertIn(f'path:"_.in.multiplier.{state}"', update_line)
             self.assertNotIn("@s PlayerMotion.", body)
 
-        process = read("player_motion/data/player_motion/function/api/process.mcfunction")
+        process = read("player_motion/data/player_motion/function/accumulate/4.motion_set.mcfunction")
         pipeline = (
-            "function player_motion:api/transform/global_to_target",
-            "function player_motion:api/multiplier/in_water",
-            "function player_motion:api/multiplier/elytra",
-            "function player_motion:api/multiplier/swim",
-            "function player_motion:api/transform/target_to_global",
-            "function player_motion:api/accumulate",
+            "function player_motion:accumulate/rotation/2.target",
+            "function player_motion:accumulate/multiplier/in_water",
+            "function player_motion:accumulate/multiplier/elytra",
+            "function player_motion:accumulate/multiplier/swim",
         )
         for call in pipeline:
             self.assertIn(call, process)
@@ -348,7 +369,7 @@ class DataPackContractTests(unittest.TestCase):
             state_line = next(
                 line
                 for line in process.splitlines()
-                if f"function player_motion:api/multiplier/{state}" in line
+                if f"function player_motion:accumulate/multiplier/{state}" in line
             )
             self.assertIn(flag, state_line)
             self.assertIn('{type:"entity_properties"', state_line)
@@ -669,8 +690,8 @@ class DataPackContractTests(unittest.TestCase):
             self.assertNotIn(obsolete, public_runtime)
 
     def test_fixed_point_saturation(self):
-        path = PACK / "data/player_motion/function/api/accumulate.mcfunction"
-        self.assertTrue(path.is_file(), "api/accumulate.mcfunction must exist")
+        path = PACK / "data/player_motion/function/accumulate/5.score.mcfunction"
+        self.assertTrue(path.is_file(), "accumulate/5.score.mcfunction must exist")
         accumulate = path.read_text(encoding="utf-8")
 
         for literal in ("1000000", "1024000000", "-1024000000"):

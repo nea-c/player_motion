@@ -4,5 +4,5 @@ data modify storage player_motion: _.in merge from storage player_motion: in
 
 # Capture the call site's rotation before process may change @s to a vehicle.
 execute unless data storage neac: {DimensionGenerated:1b} run return fail
-function player_motion:internal/rotation/capture_execution
-return run function player_motion:api/process
+function player_motion:accumulate/rotation/1.execution
+return run function player_motion:accumulate/1.call
