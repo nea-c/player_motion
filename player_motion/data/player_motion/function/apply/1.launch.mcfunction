@@ -24,9 +24,9 @@ execute if score #player_motion.passenger_failed PlayerMotion.X matches 1 on pas
 execute if score #player_motion.passenger_failed PlayerMotion.X matches 1 run return 0
 
 execute unless entity @s[type=player] run function player_motion:apply/2.protect
-# Do not expose a nonplayer if enabling protection failed.
-execute unless entity @s[type=player] unless entity @s[nbt={Invulnerable:1b}] on passengers run function player_motion:apply/passenger/6.restore_tree
-execute unless entity @s[type=player] unless entity @s[nbt={Invulnerable:1b}] run return 0
+# Do not expose the root or its passengers if enabling protection failed.
+execute unless entity @s[type=player] unless data storage player_motion: _{Invulnerable:true} on passengers run function player_motion:apply/passenger/6.restore_tree
+execute unless entity @s[type=player] unless data storage player_motion: _{Invulnerable:true} run return 0
 function player_motion:apply/3.prepare
 execute if score #player_motion PlayerMotion.X matches 1 run function player_motion:apply/4.apply
 execute on passengers run function player_motion:apply/passenger/6.restore_tree

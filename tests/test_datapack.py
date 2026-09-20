@@ -289,10 +289,9 @@ class DataPackContractTests(unittest.TestCase):
         accumulate = read(
             "player_motion/data/player_motion/function/accumulate/5.score.mcfunction"
         )
-        for objective in "XYZ":
-            reset = f"scoreboard players reset #player_motion PlayerMotion.{objective}"
-            self.assertIn(reset, accumulate)
-            self.assertLess(accumulate.index(reset), accumulate.index("tag @s add"))
+        reset = "scoreboard players reset #player_motion"
+        self.assertIn(reset, accumulate)
+        self.assertLess(accumulate.index(reset), accumulate.index("tag @s add"))
 
         flush = read("player_motion/data/player_motion/function/apply/0.flush.mcfunction")
         for fake_player in (
@@ -597,20 +596,22 @@ class DataPackContractTests(unittest.TestCase):
         protect = path.read_text(encoding="utf-8")
         main = (directory / "1.launch.mcfunction").read_text(encoding="utf-8")
         player_guard = "execute if entity @s[type=player] run return 0"
-        original_guard = "execute if entity @s[nbt={Invulnerable:1b}] run return 0"
+        initialize = "data modify storage player_motion: _.Invulnerable set value true"
+        original_guard = 'execute if predicate {type:"entity_properties",entity:"this",predicate:{nbt:{Invulnerable:true}}} run return 0'
         before = "data modify storage player_motion: _.launch.before set from entity @s Motion"
-        enable = "execute store success score #player_motion PlayerMotion.X run data modify entity @s Invulnerable set value 1b"
-        success_guard = "execute unless score #player_motion PlayerMotion.X matches 1 run return 0"
+        enable = "execute store success storage player_motion: _.Invulnerable byte 1 run data modify entity @s Invulnerable set value 1b"
+        success_guard = "execute unless data storage player_motion: _{Invulnerable:true} run return 0"
         mark = "tag @s add player_motion.restore_invulnerable"
         after = "data modify storage player_motion: _.launch.after set from entity @s Motion"
-        order = (player_guard, original_guard, before, enable, success_guard, mark, after)
+        order = (player_guard, initialize, original_guard, before, enable, success_guard, mark, after)
         for command in order:
             self.assertIn(command, protect)
         for first, second in zip(order, order[1:]):
             self.assertLess(protect.index(first), protect.index(second))
         self.assertIn("execute unless entity @s[type=player] run function player_motion:apply/2.protect", main)
         self.assertLess(main.index("apply/2.protect"), main.index("apply/3.prepare"))
-        self.assertIn("execute unless entity @s[type=player] unless entity @s[nbt={Invulnerable:1b}] run return 0", main)
+        self.assertNotIn("nbt=", main)
+        self.assertIn("execute unless entity @s[type=player] unless data storage player_motion: _{Invulnerable:true} run return 0", main)
         self.assertIn("execute if score #player_motion PlayerMotion.X matches 1 run function player_motion:apply/4.apply", main)
         self.assertGreater(main.index("apply/5.restore_invulnerable"), main.index("apply/4.apply"))
 
@@ -677,9 +678,12 @@ class DataPackContractTests(unittest.TestCase):
         nonplayer = (directory / "5.protect_nonplayer.mcfunction").read_text(encoding="utf-8")
         self.assertIn("execute on passengers run function player_motion:apply/passenger/4.protect_tree", protect)
         self.assertIn("execute on passengers run function player_motion:apply/passenger/6.restore_tree", restore)
-        self.assertIn("@s[nbt={Invulnerable:1b}] run return 0", nonplayer)
-        self.assertIn("Invulnerable set value 1b", nonplayer)
-        self.assertIn("matches 1 run tag @s add player_motion.restore_invulnerable", nonplayer)
+        self.assertNotIn("nbt=", nonplayer)
+        self.assertIn("data modify storage player_motion: _.Invulnerable set value true", nonplayer)
+        self.assertIn('execute if predicate {type:"entity_properties",entity:"this",predicate:{nbt:{Invulnerable:true}}} run return 0', nonplayer)
+        self.assertIn("execute store success storage player_motion: _.Invulnerable byte 1 run data modify entity @s Invulnerable set value 1b", nonplayer)
+        self.assertIn("execute if data storage player_motion: _{Invulnerable:true} run tag @s add player_motion.restore_invulnerable", nonplayer)
+        self.assertIn("execute unless data storage player_motion: _{Invulnerable:true} run scoreboard players set #player_motion.passenger_failed PlayerMotion.X 1", nonplayer)
         self.assertNotIn("_.launch", nonplayer, "passenger motion must not change the root launch vector")
         resistance = (directory / "1.resistance.mcfunction").read_text(encoding="utf-8")
         self.assertIn("player_motion:passenger_resistance 1 add_value", resistance)
@@ -698,6 +702,15 @@ class DataPackContractTests(unittest.TestCase):
         self.assertLess(main.index(before), main.index("run function player_motion:apply/2.protect"))
         self.assertGreater(main.rindex(after), main.index("run function player_motion:apply/4.apply"))
         self.assertIn("if score #player_motion.passenger_failed PlayerMotion.X matches 1 run return 0", main)
+
+    def test_entity_selectors_do_not_search_nbt(self):
+        functions = PACK / "data/player_motion/function"
+        offenders = [
+            path.relative_to(PACK).as_posix()
+            for path in functions.rglob("*.mcfunction")
+            if "nbt=" in path.read_text(encoding="utf-8")
+        ]
+        self.assertEqual(offenders, [])
 
     def test_passenger_effective_resistance_preflight(self):
         directory = PACK / "data/player_motion/function/apply/passenger"
