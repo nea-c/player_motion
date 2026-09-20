@@ -1,9 +1,9 @@
 # Revalidate player-only eligibility at flush time before mutating any launch,
 # protection, gamemode, passenger, or position state. Queue cleanup is owned by
 # the unconditional flush wrapper and still runs after these early returns.
-execute if entity @s[type=minecraft:player,gamemode=spectator] run return 0
-execute if entity @s[type=minecraft:player,gamemode=creative] if predicate {type:"minecraft:entity_properties",entity:"this",predicate:{flags:{is_flying:true,is_fall_flying:false}}} run return 0
-execute if entity @s[type=minecraft:player] on vehicle run return 0
+execute if entity @s[type=player,gamemode=spectator] run return 0
+execute if entity @s[type=player,gamemode=creative] if predicate {type:"entity_properties",entity:"this",predicate:{flags:{is_flying:true,is_fall_flying:false}}} run return 0
+execute if entity @s[type=player] on vehicle run return 0
 
 # Consume the saturated global vector. Tick owns pending-tag/score cleanup.
 data modify storage player_motion: _.launch set value {}
@@ -23,13 +23,13 @@ execute on passengers run function player_motion:internal/launch/passenger/prote
 execute if score #passenger_failed PlayerMotion.X matches 1 on passengers run function player_motion:internal/launch/passenger/restore_tree
 execute if score #passenger_failed PlayerMotion.X matches 1 run return 0
 
-execute unless entity @s[type=minecraft:player] run function player_motion:internal/launch/protect
+execute unless entity @s[type=player] run function player_motion:internal/launch/protect
 # Do not expose a nonplayer if enabling protection failed.
-execute unless entity @s[type=minecraft:player] unless entity @s[nbt={Invulnerable:1b}] on passengers run function player_motion:internal/launch/passenger/restore_tree
-execute unless entity @s[type=minecraft:player] unless entity @s[nbt={Invulnerable:1b}] run return 0
+execute unless entity @s[type=player] unless entity @s[nbt={Invulnerable:1b}] on passengers run function player_motion:internal/launch/passenger/restore_tree
+execute unless entity @s[type=player] unless entity @s[nbt={Invulnerable:1b}] run return 0
 function player_motion:internal/launch/prepare
 execute if score #magnitude PlayerMotion.X matches 1 run function player_motion:internal/launch/apply
 execute on passengers run function player_motion:internal/launch/passenger/restore_tree
 # A clipped-motion correction can cancel the requested impulse. Restore in that
 # case too; unsafe post-launch motion leaves the tag for the recurring tick.
-execute if entity @s[type=!minecraft:player,tag=player_motion.restore_invulnerable] run function player_motion:internal/launch/restore_invulnerable
+execute if entity @s[type=!player,tag=player_motion.restore_invulnerable] run function player_motion:internal/launch/restore_invulnerable

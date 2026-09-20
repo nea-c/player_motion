@@ -38,7 +38,7 @@ def launch_geometry(vector, eye_height=1.62):
     def evaluate(provider):
         if isinstance(provider, (int, float)):
             return f32(provider)
-        kind = provider["type"].removeprefix("minecraft:")
+        kind = provider["type"]
         if kind == "storage":
             return values[provider["path"].removeprefix("_.launch.")]
         if kind in ("add", "mul", "min", "max"):
@@ -162,6 +162,14 @@ class DataPackContractTests(unittest.TestCase):
         objectives = re.findall(r"^scoreboard objectives add (\S+)", commands, re.MULTILINE)
         self.assertEqual(objectives, ["PlayerMotion.X", "PlayerMotion.Y", "PlayerMotion.Z"])
 
+    def test_default_minecraft_namespace_is_omitted(self):
+        sources = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted((PACK / "data/player_motion").rglob("*"))
+            if path.is_file()
+        )
+        self.assertNotIn("minecraft:", sources)
+
     def test_neac_marker_contract(self):
         commands = [
             line.strip()
@@ -214,8 +222,8 @@ class DataPackContractTests(unittest.TestCase):
         ):
             self.assertRegex(call, rf"(?:^|[{{,]){key}:")
         self.assertIn("on vehicle", api)
-        self.assertIn("minecraft:knockback_resistance", api)
-        self.assertIn("minecraft:explosion_knockback_resistance", api)
+        self.assertIn("knockback_resistance", api)
+        self.assertIn("explosion_knockback_resistance", api)
         self.assertIn("get 1000000", api)
         self.assertIn("float 0.000001", api)
         self.assertLess(
@@ -254,8 +262,8 @@ class DataPackContractTests(unittest.TestCase):
         )
 
         self.assertIn("compute default float", transforms)
-        self.assertIn('type:"minecraft:sin"', transforms)
-        self.assertIn('type:"minecraft:cos"', transforms)
+        self.assertIn('type:"sin"', transforms)
+        self.assertIn('type:"cos"', transforms)
         self.assertIn("0.017453292519943295", transforms)
         self.assertIn("_.target.x", transforms)
         self.assertIn("_.target.y", transforms)
@@ -290,7 +298,7 @@ class DataPackContractTests(unittest.TestCase):
             body = functions[state]
             self.assertIn(f"_.in.multiplier.{state}", body)
             self.assertIn("_.target.z", body)
-            self.assertNotIn('type:"minecraft:sign"', body)
+            self.assertNotIn('type:"sign"', body)
             self.assertIn(
                 "execute store result score #positive PlayerMotion.Z", body
             )
@@ -299,9 +307,9 @@ class DataPackContractTests(unittest.TestCase):
                 for line in body.splitlines()
                 if "execute store result score #positive PlayerMotion.Z" in line
             )
-            self.assertIn('type:"minecraft:ceil"', gate_line)
-            self.assertIn('type:"minecraft:min"', gate_line)
-            self.assertIn('type:"minecraft:max"', gate_line)
+            self.assertIn('type:"ceil"', gate_line)
+            self.assertIn('type:"min"', gate_line)
+            self.assertIn('type:"max"', gate_line)
             self.assertIn('path:"_.target.z"', gate_line)
             self.assertIn("0.0", gate_line)
             self.assertIn("1.0", gate_line)
@@ -343,7 +351,7 @@ class DataPackContractTests(unittest.TestCase):
                 if f"function player_motion:api/multiplier/{state}" in line
             )
             self.assertIn(flag, state_line)
-            self.assertIn('{type:"minecraft:entity_properties"', state_line)
+            self.assertIn('{type:"entity_properties"', state_line)
             self.assertNotIn("{condition:", state_line)
 
     def test_end_crystal_geometry(self):
@@ -356,13 +364,13 @@ class DataPackContractTests(unittest.TestCase):
             )
         self.assertIn("compute default float", launch)
         for provider in ("sqrt", "div", "floor", "min", "max"):
-            self.assertIn(f'type:"minecraft:{provider}"', launch)
+            self.assertIn(f'type:"{provider}"', launch)
         for literal in ("0.8", "12.0", "_.launch.full_d", "_.launch.d"):
             self.assertIn(literal, launch)
         self.assertIn("#full_count PlayerMotion.X", launch + summon)
         self.assertIn("summon end_crystal run damage @s 0", summon)
         self.assertNotIn("player_motion.internal.", launch + summon)
-        self.assertNotIn('type:"minecraft:entity_eye_height"', launch)
+        self.assertNotIn('type:"entity_eye_height"', launch)
         main = read("player_motion/data/player_motion/function/internal/launch/main.mcfunction")
         self.assertIn("matches 0 if score @s PlayerMotion.Y matches 0 if score @s PlayerMotion.Z matches 0 run return 0", main)
         crystal = read("player_motion/data/player_motion/function/internal/summon/crystal.mcfunction")
@@ -385,7 +393,7 @@ class DataPackContractTests(unittest.TestCase):
         self.assertLess(apply.index("positioned ~ ~10000 ~"), apply.index("tp ~ ~ ~"))
         for line in apply.splitlines():
             if "run gamemode" in line or "run function player_motion:internal/launch/gamemode/" in line:
-                self.assertIn("if entity @s[type=minecraft:player]", line)
+                self.assertIn("if entity @s[type=player]", line)
         self.assertIn("store success score #resistance PlayerMotion.X", apply)
         self.assertIn("if score #resistance PlayerMotion.X matches 1 run attribute", apply)
         self.assertIn("-1 add_multiplied_total", apply)
@@ -428,7 +436,7 @@ class DataPackContractTests(unittest.TestCase):
         self.assertTrue(path.is_file(), "nonplayer protection helper must exist")
         protect = path.read_text(encoding="utf-8")
         main = (directory / "main.mcfunction").read_text(encoding="utf-8")
-        player_guard = "execute if entity @s[type=minecraft:player] run return 0"
+        player_guard = "execute if entity @s[type=player] run return 0"
         original_guard = "execute if entity @s[nbt={Invulnerable:1b}] run return 0"
         before = "data modify storage player_motion: _.launch.before set from entity @s Motion"
         enable = "execute store success score #protected PlayerMotion.X run data modify entity @s Invulnerable set value 1b"
@@ -440,18 +448,18 @@ class DataPackContractTests(unittest.TestCase):
             self.assertIn(command, protect)
         for first, second in zip(order, order[1:]):
             self.assertLess(protect.index(first), protect.index(second))
-        self.assertIn("execute unless entity @s[type=minecraft:player] run function player_motion:internal/launch/protect", main)
+        self.assertIn("execute unless entity @s[type=player] run function player_motion:internal/launch/protect", main)
         self.assertLess(main.index("internal/launch/protect"), main.index("internal/launch/prepare"))
-        self.assertIn("execute unless entity @s[type=minecraft:player] unless entity @s[nbt={Invulnerable:1b}] run return 0", main)
+        self.assertIn("execute unless entity @s[type=player] unless entity @s[nbt={Invulnerable:1b}] run return 0", main)
         self.assertIn("execute if score #magnitude PlayerMotion.X matches 1 run function player_motion:internal/launch/apply", main)
         self.assertGreater(main.index("internal/launch/restore_invulnerable"), main.index("internal/launch/apply"))
 
         def evaluate(value, values):
-            if value["type"] == "minecraft:storage":
+            if value["type"] == "storage":
                 return values[value["path"]]
-            if value["type"] == "minecraft:add":
+            if value["type"] == "add":
                 return sum(evaluate(x, values) for x in value["inputs"])
-            self.assertEqual(value["type"], "minecraft:sub")
+            self.assertEqual(value["type"], "sub")
             return evaluate(value["left"], values) - evaluate(value["right"], values)
 
         # The clipped components are recovered; an unchanged component is not doubled.
@@ -469,7 +477,7 @@ class DataPackContractTests(unittest.TestCase):
         prepare = (directory / "prepare.mcfunction").read_text(encoding="utf-8")
         zero_guard = "execute if score #magnitude PlayerMotion.X matches 0 run return 0"
         self.assertIn(zero_guard, prepare)
-        self.assertLess(prepare.index(zero_guard), prepare.index('type:"minecraft:div"'))
+        self.assertLess(prepare.index(zero_guard), prepare.index('type:"div"'))
 
     def test_restore_invulnerable_waits_for_exact_safe_motion(self):
         path = PACK / "data/player_motion/function/internal/launch/restore_invulnerable.mcfunction"
@@ -477,7 +485,7 @@ class DataPackContractTests(unittest.TestCase):
         restore = path.read_text(encoding="utf-8")
         lines = [line for line in restore.splitlines() if line and not line.startswith("#")]
         self.assertEqual(lines[:2], [
-            "execute if entity @s[type=minecraft:player] run return 0",
+            "execute if entity @s[type=player] run return 0",
             "execute unless entity @s[tag=player_motion.restore_invulnerable] run return 0",
         ])
         probes = []
@@ -518,7 +526,7 @@ class DataPackContractTests(unittest.TestCase):
         self.assertIn("matches 1 run tag @s add player_motion.passenger_resistance", resistance)
         self.assertIn("modifier remove player_motion:passenger_resistance", restore)
         self.assertIn("function player_motion:internal/launch/restore_invulnerable", restore)
-        self.assertIn("if score #passenger_launched PlayerMotion.X matches 1 unless entity @s[type=minecraft:player] run data modify entity @s Motion set value [0.0d,0.0d,0.0d]", restore)
+        self.assertIn("if score #passenger_launched PlayerMotion.X matches 1 unless entity @s[type=player] run data modify entity @s Motion set value [0.0d,0.0d,0.0d]", restore)
         for mode in ("survival", "adventure"):
             self.assertIn(f"gamemode={mode}] run tag @s add player_motion.passenger_{mode}", protect)
             self.assertIn(f"tag=player_motion.passenger_{mode}] run gamemode creative @s", protect)
@@ -543,7 +551,7 @@ class DataPackContractTests(unittest.TestCase):
         apply = read("player_motion/data/player_motion/function/internal/launch/apply.mcfunction")
         self.assertIn("execute on passengers run function player_motion:internal/launch/passenger/prepare_tree", prepare)
         self.assertNotIn("data modify entity", prepare + resistance)
-        exact_probe = "execute store result score #passenger_effective PlayerMotion.X run attribute @s minecraft:explosion_knockback_resistance get"
+        exact_probe = "execute store result score #passenger_effective PlayerMotion.X run attribute @s explosion_knockback_resistance get"
         self.assertIn(exact_probe, resistance)
         self.assertGreater(resistance.rindex(exact_probe), resistance.index("function player_motion:internal/launch/passenger/prepare_boost"))
         self.assertIn("unless score #passenger_effective PlayerMotion.X matches 1 run scoreboard players set #passenger_failed PlayerMotion.X 1", resistance)
@@ -588,7 +596,7 @@ class DataPackContractTests(unittest.TestCase):
             [
                 "execute as @e[tag=player_motion.pending,distance=0..] at @s run function player_motion:internal/launch/main",
                 "execute as @e[tag=player_motion.pending,distance=0..] at @s run function player_motion:internal/launch/cleanup",
-                "execute as @e[type=!minecraft:player,tag=player_motion.restore_invulnerable,distance=0..] run function player_motion:internal/launch/restore_invulnerable",
+                "execute as @e[type=!player,tag=player_motion.restore_invulnerable,distance=0..] run function player_motion:internal/launch/restore_invulnerable",
             ],
         )
 
@@ -623,9 +631,9 @@ class DataPackContractTests(unittest.TestCase):
             if line and not line.startswith("#")
         ]
         guards = [
-            "execute if entity @s[type=minecraft:player,gamemode=spectator] run return 0",
-            "execute if entity @s[type=minecraft:player,gamemode=creative] if predicate {type:\"minecraft:entity_properties\",entity:\"this\",predicate:{flags:{is_flying:true,is_fall_flying:false}}} run return 0",
-            "execute if entity @s[type=minecraft:player] on vehicle run return 0",
+            "execute if entity @s[type=player,gamemode=spectator] run return 0",
+            "execute if entity @s[type=player,gamemode=creative] if predicate {type:\"entity_properties\",entity:\"this\",predicate:{flags:{is_flying:true,is_fall_flying:false}}} run return 0",
+            "execute if entity @s[type=player] on vehicle run return 0",
         ]
         self.assertEqual(
             commands[:3],
@@ -634,7 +642,7 @@ class DataPackContractTests(unittest.TestCase):
             "gamemode, position, or passenger state can change",
         )
         self.assertTrue(
-            all("type=minecraft:player" in guard for guard in guards),
+            all("type=player" in guard for guard in guards),
             "current-player guards must not reject root vehicle targets",
         )
 
@@ -687,9 +695,9 @@ class DataPackContractTests(unittest.TestCase):
             self.assertIn(store, accumulate)
             component_line = next(line for line in accumulate.splitlines() if store in line)
             self.assertIn(f'path:"_.calc.{axis}"', component_line)
-            self.assertIn('type:"minecraft:min"', component_line)
-            self.assertIn('type:"minecraft:max"', component_line)
-            self.assertIn('type:"minecraft:round"', component_line)
+            self.assertIn('type:"min"', component_line)
+            self.assertIn('type:"max"', component_line)
+            self.assertIn('type:"round"', component_line)
             for literal in ("-1024.0", "1024.0", "1000000.0"):
                 self.assertIn(literal, component_line)
             self.assertLess(accumulate.index(store), accumulate.index(add))

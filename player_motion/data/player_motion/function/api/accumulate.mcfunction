@@ -1,7 +1,7 @@
 # Convert this call to six-decimal fixed point after clamping each float component.
-execute store result score #delta PlayerMotion.X run compute default float {type:"minecraft:round",input:{type:"minecraft:mul",inputs:[{type:"minecraft:min",inputs:[{type:"minecraft:max",inputs:[{type:"minecraft:storage",storage:"player_motion:",path:"_.calc.x"},-1024.0]},1024.0]},1000000.0]}}
-execute store result score #delta PlayerMotion.Y run compute default float {type:"minecraft:round",input:{type:"minecraft:mul",inputs:[{type:"minecraft:min",inputs:[{type:"minecraft:max",inputs:[{type:"minecraft:storage",storage:"player_motion:",path:"_.calc.y"},-1024.0]},1024.0]},1000000.0]}}
-execute store result score #delta PlayerMotion.Z run compute default float {type:"minecraft:round",input:{type:"minecraft:mul",inputs:[{type:"minecraft:min",inputs:[{type:"minecraft:max",inputs:[{type:"minecraft:storage",storage:"player_motion:",path:"_.calc.z"},-1024.0]},1024.0]},1000000.0]}}
+execute store result score #delta PlayerMotion.X run compute default float {type:"round",input:{type:"mul",inputs:[{type:"min",inputs:[{type:"max",inputs:[{type:"storage",storage:"player_motion:",path:"_.calc.x"},-1024.0]},1024.0]},1000000.0]}}
+execute store result score #delta PlayerMotion.Y run compute default float {type:"round",input:{type:"mul",inputs:[{type:"min",inputs:[{type:"max",inputs:[{type:"storage",storage:"player_motion:",path:"_.calc.y"},-1024.0]},1024.0]},1000000.0]}}
+execute store result score #delta PlayerMotion.Z run compute default float {type:"round",input:{type:"mul",inputs:[{type:"min",inputs:[{type:"max",inputs:[{type:"storage",storage:"player_motion:",path:"_.calc.z"},-1024.0]},1024.0]},1000000.0]}}
 
 # Add safe operands, then immediately saturate every accumulated component.
 scoreboard players operation @s PlayerMotion.X += #delta PlayerMotion.X

@@ -5,4 +5,4 @@ execute as @e[tag=player_motion.pending,distance=0..] at @s run function player_
 execute as @e[tag=player_motion.pending,distance=0..] at @s run function player_motion:internal/launch/cleanup
 
 # Protection restoration is independent of whether an entity has new motion.
-execute as @e[type=!minecraft:player,tag=player_motion.restore_invulnerable,distance=0..] run function player_motion:internal/launch/restore_invulnerable
+execute as @e[type=!player,tag=player_motion.restore_invulnerable,distance=0..] run function player_motion:internal/launch/restore_invulnerable

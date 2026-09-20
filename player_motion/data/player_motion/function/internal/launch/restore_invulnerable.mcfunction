@@ -1,6 +1,6 @@
 # Call after launch and retry each tick for tagged entities in every dimension.
 # Never rewrite players or targets whose original invulnerability we did not change.
-execute if entity @s[type=minecraft:player] run return 0
+execute if entity @s[type=player] run return 0
 execute unless entity @s[tag=player_motion.restore_invulnerable] run return 0
 
 # Entity.load preserves Motion only within inclusive +/-10. Two exact double
