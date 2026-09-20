@@ -28,7 +28,7 @@ execute unless entity @s[type=player] run function player_motion:apply/2.protect
 execute unless entity @s[type=player] unless entity @s[nbt={Invulnerable:1b}] on passengers run function player_motion:apply/passenger/6.restore_tree
 execute unless entity @s[type=player] unless entity @s[nbt={Invulnerable:1b}] run return 0
 function player_motion:apply/3.prepare
-execute if score #magnitude PlayerMotion.X matches 1 run function player_motion:apply/4.apply
+execute if score # PlayerMotion.X matches 1 run function player_motion:apply/4.apply
 execute on passengers run function player_motion:apply/passenger/6.restore_tree
 # A clipped-motion correction can cancel the requested impulse. Restore in that
 # case too; unsafe post-launch motion leaves the tag for the recurring tick.

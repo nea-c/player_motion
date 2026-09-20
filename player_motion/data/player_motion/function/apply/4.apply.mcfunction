@@ -1,7 +1,7 @@
 # Non-living vehicles have no Health tag and skip attribute handling.
 # Record successful addition so an absent attribute cannot affect restoration.
-scoreboard players set #resistance PlayerMotion.X 0
-execute if data entity @s Health store success score #resistance PlayerMotion.X run attribute @s explosion_knockback_resistance modifier add player_motion:disable_knockback_resistance -1 add_multiplied_total
+scoreboard players set # PlayerMotion.Z 0
+execute if data entity @s Health store success score # PlayerMotion.Z run attribute @s explosion_knockback_resistance modifier add player_motion:disable_knockback_resistance -1 add_multiplied_total
 execute if entity @s[type=player] run function player_motion:apply/gamemode/0.get
 execute if entity @s[type=player] run gamemode creative @s
 
@@ -12,4 +12,4 @@ execute rotated as @s positioned ~ ~10000 ~ run function player_motion:apply/sum
 tp ~ ~ ~
 
 execute if entity @s[type=player] run function player_motion:apply/gamemode/1.restore
-execute if score #resistance PlayerMotion.X matches 1 run attribute @s explosion_knockback_resistance modifier remove player_motion:disable_knockback_resistance
+execute if score # PlayerMotion.Z matches 1 run attribute @s explosion_knockback_resistance modifier remove player_motion:disable_knockback_resistance

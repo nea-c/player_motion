@@ -103,7 +103,7 @@ def launch_geometry(vector, eye_height=1.62):
         match = re.search(r"_\.launch\.(\w+) set compute default float (.+)$", line)
         if not match:
             continue
-        if line.startswith("execute if score #residual") and values["residual"] == 0:
+        if line.startswith("execute if score # PlayerMotion.Y") and values["residual"] == 0:
             continue
         name, expression = match.groups()
         expression = re.sub(r"([,{])([a-z_]+):", r'\1"\2":', expression)
@@ -269,6 +269,44 @@ class DataPackContractTests(unittest.TestCase):
         objectives = re.findall(r"^scoreboard objectives add (\S+)", commands, re.MULTILINE)
         self.assertEqual(objectives, ["PlayerMotion.X", "PlayerMotion.Y", "PlayerMotion.Z"])
 
+    def test_scratch_scoreholders_are_reused_and_reset(self):
+        commands = all_mcfunctions()
+        fake_players = set(
+            re.findall(
+                r"(?<!\S)(#[A-Za-z0-9_.+-]*)(?=\s+PlayerMotion\.[XYZ]\b)",
+                commands,
+            )
+        )
+        self.assertEqual(
+            fake_players,
+            {"#", "#passenger_failed", "#passenger_launched"},
+        )
+
+        for state in ("elytra", "swim"):
+            body = read(
+                "player_motion/data/player_motion/function/accumulate/"
+                f"multiplier/{state}.mcfunction"
+            )
+            self.assertIn("scoreboard players reset # PlayerMotion.Z", body)
+
+        accumulate = read(
+            "player_motion/data/player_motion/function/accumulate/5.score.mcfunction"
+        )
+        for objective in "XYZ":
+            reset = f"scoreboard players reset # PlayerMotion.{objective}"
+            self.assertIn(reset, accumulate)
+            self.assertLess(accumulate.index(reset), accumulate.index("tag @s add"))
+
+        flush = read("player_motion/data/player_motion/function/apply/0.flush.mcfunction")
+        for fake_player in ("#", "#passenger_failed", "#passenger_launched"):
+            self.assertIn(f"scoreboard players reset {fake_player}", flush)
+
+        gamemode = read_mcfunction_tree(
+            "data/player_motion/function/apply/gamemode"
+        )
+        self.assertNotIn("scoreboard players", gamemode)
+        self.assertIn("_.launch.mode", gamemode)
+
     def test_default_minecraft_namespace_is_omitted(self):
         sources = "\n".join(
             path.read_text(encoding="utf-8")
@@ -428,12 +466,12 @@ class DataPackContractTests(unittest.TestCase):
             self.assertIn("_.target.z", body)
             self.assertNotIn('type:"sign"', body)
             self.assertIn(
-                "execute store result score #positive PlayerMotion.Z", body
+                "execute store result score # PlayerMotion.Z", body
             )
             gate_line = next(
                 line
                 for line in body.splitlines()
-                if "execute store result score #positive PlayerMotion.Z" in line
+                if "execute store result score # PlayerMotion.Z" in line
             )
             self.assertIn('type:"ceil"', gate_line)
             self.assertIn('type:"min"', gate_line)
@@ -493,14 +531,14 @@ class DataPackContractTests(unittest.TestCase):
             self.assertIn(f'type:"{provider}"', launch)
         for literal in ("0.8", "12.0", "_.launch.full_d", "_.launch.d"):
             self.assertIn(literal, launch)
-        self.assertIn("#full_count PlayerMotion.X", launch + summon)
+        self.assertIn("# PlayerMotion.X", launch + summon)
         self.assertIn("summon end_crystal run damage @s 0", summon)
         self.assertNotIn("player_motion.internal.", launch + summon)
         self.assertNotIn('type:"entity_eye_height"', launch)
         main = read("player_motion/data/player_motion/function/apply/1.launch.mcfunction")
         self.assertIn("matches 0 if score @s PlayerMotion.Y matches 0 if score @s PlayerMotion.Z matches 0 run return 0", main)
         crystal = read("player_motion/data/player_motion/function/apply/summon/1.crystal.mcfunction")
-        self.assertIn("if score #residual PlayerMotion.X matches 1", crystal)
+        self.assertIn("if score # PlayerMotion.Y matches 1", crystal)
 
     def test_explosion_location(self):
         launch = read_mcfunction_tree("data/player_motion/function/apply")
@@ -520,8 +558,8 @@ class DataPackContractTests(unittest.TestCase):
         for line in apply.splitlines():
             if "run gamemode" in line or "run function player_motion:apply/gamemode/" in line:
                 self.assertIn("if entity @s[type=player]", line)
-        self.assertIn("store success score #resistance PlayerMotion.X", apply)
-        self.assertIn("if score #resistance PlayerMotion.X matches 1 run attribute", apply)
+        self.assertIn("store success score # PlayerMotion.Z", apply)
+        self.assertIn("if score # PlayerMotion.Z matches 1 run attribute", apply)
         self.assertIn("-1 add_multiplied_total", apply)
         self.assertIn("modifier remove player_motion:disable_knockback_resistance", apply)
 
@@ -565,8 +603,8 @@ class DataPackContractTests(unittest.TestCase):
         player_guard = "execute if entity @s[type=player] run return 0"
         original_guard = "execute if entity @s[nbt={Invulnerable:1b}] run return 0"
         before = "data modify storage player_motion: _.launch.before set from entity @s Motion"
-        enable = "execute store success score #protected PlayerMotion.X run data modify entity @s Invulnerable set value 1b"
-        success_guard = "execute unless score #protected PlayerMotion.X matches 1 run return 0"
+        enable = "execute store success score # PlayerMotion.X run data modify entity @s Invulnerable set value 1b"
+        success_guard = "execute unless score # PlayerMotion.X matches 1 run return 0"
         mark = "tag @s add player_motion.restore_invulnerable"
         after = "data modify storage player_motion: _.launch.after set from entity @s Motion"
         order = (player_guard, original_guard, before, enable, success_guard, mark, after)
@@ -577,7 +615,7 @@ class DataPackContractTests(unittest.TestCase):
         self.assertIn("execute unless entity @s[type=player] run function player_motion:apply/2.protect", main)
         self.assertLess(main.index("apply/2.protect"), main.index("apply/3.prepare"))
         self.assertIn("execute unless entity @s[type=player] unless entity @s[nbt={Invulnerable:1b}] run return 0", main)
-        self.assertIn("execute if score #magnitude PlayerMotion.X matches 1 run function player_motion:apply/4.apply", main)
+        self.assertIn("execute if score # PlayerMotion.X matches 1 run function player_motion:apply/4.apply", main)
         self.assertGreater(main.index("apply/5.restore_invulnerable"), main.index("apply/4.apply"))
 
         def evaluate(value, values):
@@ -601,7 +639,7 @@ class DataPackContractTests(unittest.TestCase):
             self.assertEqual(evaluate(expression, values), expected)
 
         prepare = (directory / "3.prepare.mcfunction").read_text(encoding="utf-8")
-        zero_guard = "execute if score #magnitude PlayerMotion.X matches 0 run return 0"
+        zero_guard = "execute if score # PlayerMotion.X matches 0 run return 0"
         self.assertIn(zero_guard, prepare)
         self.assertLess(prepare.index(zero_guard), prepare.index('type:"div"'))
 
@@ -616,13 +654,13 @@ class DataPackContractTests(unittest.TestCase):
         ])
         probes = []
         for i, line in enumerate(lines):
-            match = re.fullmatch(r"execute store result score #restore_motion PlayerMotion.X run data get entity @s Motion\[([012])\] (-?1)", line)
+            match = re.fullmatch(r"execute store result score # PlayerMotion.X run data get entity @s Motion\[([012])\] (-?1)", line)
             if match:
                 probes.append(tuple(map(int, match.groups())))
-                self.assertEqual(lines[i + 1], "execute unless score #restore_motion PlayerMotion.X matches -10..10 run return 0")
+                self.assertEqual(lines[i + 1], "execute unless score # PlayerMotion.X matches -10..10 run return 0")
         self.assertEqual(probes, [(0, 1), (0, -1), (1, 1), (1, -1), (2, 1), (2, -1)])
-        write = "execute store success score #restored PlayerMotion.X run data modify entity @s Invulnerable set value 0b"
-        remove = "execute if score #restored PlayerMotion.X matches 1 run tag @s remove player_motion.restore_invulnerable"
+        write = "execute store success score # PlayerMotion.X run data modify entity @s Invulnerable set value 0b"
+        remove = "execute if score # PlayerMotion.X matches 1 run tag @s remove player_motion.restore_invulnerable"
         self.assertEqual(lines[-2:], [write, remove])
         # Dual floor probes distinguish adjacent doubles outside +/-10 from the
         # inclusive endpoints, unlike a float32 safety check that rounds to 10.
@@ -677,10 +715,10 @@ class DataPackContractTests(unittest.TestCase):
         apply = read("player_motion/data/player_motion/function/apply/4.apply.mcfunction")
         self.assertIn("execute on passengers run function player_motion:apply/passenger/0.prepare_tree", prepare)
         self.assertNotIn("data modify entity", prepare + resistance)
-        exact_probe = "execute store result score #passenger_effective PlayerMotion.X run attribute @s explosion_knockback_resistance get"
+        exact_probe = "execute store result score # PlayerMotion.X run attribute @s explosion_knockback_resistance get"
         self.assertIn(exact_probe, resistance)
         self.assertGreater(resistance.rindex(exact_probe), resistance.index("function player_motion:apply/passenger/2.prepare_boost"))
-        self.assertIn("unless score #passenger_effective PlayerMotion.X matches 1 run scoreboard players set #passenger_failed PlayerMotion.X 1", resistance)
+        self.assertIn("unless score # PlayerMotion.X matches 1 run scoreboard players set #passenger_failed PlayerMotion.X 1", resistance)
         self.assertIn("player_motion:passenger_resistance_boost $(boost) add_multiplied_total", boost)
         self.assertIn("modifier remove player_motion:passenger_resistance_boost", restore)
         self.assertIn("tag @s remove player_motion.passenger_resistance_boost", restore)
@@ -721,6 +759,9 @@ class DataPackContractTests(unittest.TestCase):
                 "execute as @e[tag=player_motion.pending,distance=0..] at @s run function player_motion:apply/1.launch",
                 "execute as @e[tag=player_motion.pending,distance=0..] at @s run function player_motion:apply/6.cleanup",
                 "execute as @e[type=!player,tag=player_motion.restore_invulnerable,distance=0..] run function player_motion:apply/5.restore_invulnerable",
+                "scoreboard players reset #",
+                "scoreboard players reset #passenger_failed",
+                "scoreboard players reset #passenger_launched",
             ],
         )
 
@@ -799,12 +840,12 @@ class DataPackContractTests(unittest.TestCase):
             self.assertIn(literal, accumulate)
         for axis, objective in (("x", "X"), ("y", "Y"), ("z", "Z")):
             store = (
-                f"execute store result score #delta PlayerMotion.{objective} "
+                f"execute store result score # PlayerMotion.{objective} "
                 "run compute default float"
             )
             add = (
                 f"scoreboard players operation @s PlayerMotion.{objective} "
-                f"+= #delta PlayerMotion.{objective}"
+                f"+= # PlayerMotion.{objective}"
             )
             upper = (
                 f"execute if score @s PlayerMotion.{objective} matches 1024000001.. "
