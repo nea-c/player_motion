@@ -1,6 +1,6 @@
 {
-    "values" : [
-        "player_motion:internal/init"
-    ],
-    "replace": false
+  "values": [
+    "neac:load",
+    "player_motion:internal/technical/load"
+  ]
 }

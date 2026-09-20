@@ -1,0 +1,3 @@
+# Scale only forward target-local motion while the target is fall-flying.
+execute store result score #positive PlayerMotion.Z run compute default float {type:"minecraft:ceil",input:{type:"minecraft:min",inputs:[{type:"minecraft:max",inputs:[{type:"minecraft:storage",storage:"player_motion:",path:"_.target.z"},0.0]},1.0]}}
+execute if score #positive PlayerMotion.Z matches 1 run data modify storage player_motion: _.target.z set compute default float {type:"minecraft:mul",inputs:[{type:"minecraft:storage",storage:"player_motion:",path:"_.target.z"},{type:"minecraft:storage",storage:"player_motion:",path:"_.in.multiplier.elytra"}]}

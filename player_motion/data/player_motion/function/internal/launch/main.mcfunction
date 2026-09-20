@@ -1,49 +1,35 @@
-#> player_motion:internal/launch/main
-##
-# Launches players along the internal launch vector
-#
-# @returns (1)
-##
+# Revalidate player-only eligibility at flush time before mutating any launch,
+# protection, gamemode, passenger, or position state. Queue cleanup is owned by
+# the unconditional flush wrapper and still runs after these early returns.
+execute if entity @s[type=minecraft:player,gamemode=spectator] run return 0
+execute if entity @s[type=minecraft:player,gamemode=creative] if predicate {type:"minecraft:entity_properties",entity:"this",predicate:{flags:{is_flying:true,is_fall_flying:false}}} run return 0
+execute if entity @s[type=minecraft:player] on vehicle run return 0
 
-## 
-# Apply dummy saddle with `apply_impulse` enchantment to player
-# 
-# Per Smithed specification, the dummy saddle can be unconditionally placed in a player's saddle slot because it will always be empty.
-##
-item replace entity @s saddle with saddle[\
-    equippable={slot: "saddle", equip_sound: "intentionally_empty"}, \
-    enchantments={"player_motion:internal/apply_impulse": 1} \
-]
+# Consume the saturated global vector. Tick owns pending-tag/score cleanup.
+data modify storage player_motion: _.launch set value {}
+execute store result storage player_motion: _.launch.x float 0.000001 run scoreboard players get @s PlayerMotion.X
+execute store result storage player_motion: _.launch.y float 0.000001 run scoreboard players get @s PlayerMotion.Y
+execute store result storage player_motion: _.launch.z float 0.000001 run scoreboard players get @s PlayerMotion.Z
+# A zero vector has no direction and must not reach normalization or summon.
+execute if score @s PlayerMotion.X matches 0 if score @s PlayerMotion.Y matches 0 if score @s PlayerMotion.Z matches 0 run return 0
 
-## Convert the internal launch vector from scores into a binary score tree for use by `apply_impulse` enchantment
-function player_motion:internal/store/x
-function player_motion:internal/store/y
-function player_motion:internal/store/z
+# Preflight all riders before any NBT protection write can clip the root's existing Motion.
+scoreboard players set #passenger_failed PlayerMotion.X 0
+scoreboard players set #passenger_launched PlayerMotion.X 0
+execute on passengers run function player_motion:internal/launch/passenger/prepare_tree
+execute if score #passenger_failed PlayerMotion.X matches 1 on passengers run function player_motion:internal/launch/passenger/restore_tree
+execute if score #passenger_failed PlayerMotion.X matches 1 run return 0
+execute on passengers run function player_motion:internal/launch/passenger/protect_tree
+execute if score #passenger_failed PlayerMotion.X matches 1 on passengers run function player_motion:internal/launch/passenger/restore_tree
+execute if score #passenger_failed PlayerMotion.X matches 1 run return 0
 
-## Instantly trigger the `location_changed` launch by updating the player's world state
-
-## Record current gamemode to restore after launch
-execute if entity @s[gamemode=survival] run scoreboard players set #mode player_motion.internal.gamemode 2
-execute if entity @s[gamemode=adventure] run scoreboard players set #mode player_motion.internal.gamemode 3
-
-## If not in creative mode, swap into spectator mode
-execute if score #mode player_motion.internal.gamemode matches 2..3 run gamemode spectator
-
-## If not in creative mode, restore gamemode, successful `gamemode` execution result is always `1`
-execute if score #mode player_motion.internal.gamemode matches 2 \
-    store success score #mode player_motion.internal.gamemode run \
-    return run gamemode survival
-execute if score #mode player_motion.internal.gamemode matches 3 \
-    store success score #mode player_motion.internal.gamemode run \
-    return run gamemode adventure
-
-## Player is in creative mode
-
-## If the player is falling, swap into adventure mode, else, swap into spectator mode
-scoreboard players set #falling player_motion.internal.gamemode 0
-execute if predicate player_motion:internal/falling_creative_player \
-    store success score #falling player_motion.internal.gamemode run gamemode adventure
-execute if score #falling player_motion.internal.gamemode matches 0 run gamemode spectator
-
-## Restore gamemode, successful `gamemode` execution result is always `1`
-return run gamemode creative
+execute unless entity @s[type=minecraft:player] run function player_motion:internal/launch/protect
+# Do not expose a nonplayer if enabling protection failed.
+execute unless entity @s[type=minecraft:player] unless entity @s[nbt={Invulnerable:1b}] on passengers run function player_motion:internal/launch/passenger/restore_tree
+execute unless entity @s[type=minecraft:player] unless entity @s[nbt={Invulnerable:1b}] run return 0
+function player_motion:internal/launch/prepare
+execute if score #magnitude PlayerMotion.X matches 1 run function player_motion:internal/launch/apply
+execute on passengers run function player_motion:internal/launch/passenger/restore_tree
+# A clipped-motion correction can cancel the requested impulse. Restore in that
+# case too; unsafe post-launch motion leaves the tag for the recurring tick.
+execute if entity @s[type=!minecraft:player,tag=player_motion.restore_invulnerable] run function player_motion:internal/launch/restore_invulnerable
