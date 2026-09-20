@@ -127,6 +127,7 @@ class DataPackContractTests(unittest.TestCase):
         ):
             with self.subTest(required=required):
                 self.assertIn(required, readme)
+        self.assertNotRegex(readme, r"player_motion:(?:api|internal)/")
         for obsolete in ("player_motion.api.launch_xyz", "player_motion.api.launch_looking"):
             self.assertNotIn(obsolete, readme)
 
