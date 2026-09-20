@@ -1,9 +1,9 @@
 # Revalidate player-only eligibility at flush time before mutating any launch,
 # protection, gamemode, passenger, or position state. Queue cleanup is owned by
 # the unconditional flush wrapper and still runs after these early returns.
-execute if entity @s[type=player,gamemode=spectator] run return 0
-execute if entity @s[type=player,gamemode=creative] if predicate {type:"entity_properties",entity:"this",predicate:{flags:{is_flying:true,is_fall_flying:false}}} run return 0
-execute if entity @s[type=player] on vehicle run return 0
+execute if entity @s[type=player,gamemode=spectator] run return fail
+execute if entity @s[type=player,gamemode=creative] if predicate {type:"entity_properties",entity:"this",predicate:{flags:{is_flying:true,is_fall_flying:false}}} run return fail
+execute if entity @s[type=player] on vehicle run return fail
 
 # Consume the saturated global vector. Tick owns pending-tag/score cleanup.
 data modify storage player_motion: _.launch set value {}
@@ -11,22 +11,22 @@ execute store result storage player_motion: _.launch.x float 0.000001 run scoreb
 execute store result storage player_motion: _.launch.y float 0.000001 run scoreboard players get @s PlayerMotion.Y
 execute store result storage player_motion: _.launch.z float 0.000001 run scoreboard players get @s PlayerMotion.Z
 # A zero vector has no direction and must not reach normalization or summon.
-execute if score @s PlayerMotion.X matches 0 if score @s PlayerMotion.Y matches 0 if score @s PlayerMotion.Z matches 0 run return 0
+execute if score @s PlayerMotion.X matches 0 if score @s PlayerMotion.Y matches 0 if score @s PlayerMotion.Z matches 0 run return fail
 
 # Preflight all riders before any NBT protection write can clip the root's existing Motion.
 scoreboard players set #player_motion.passenger_failed PlayerMotion.X 0
 scoreboard players set #player_motion.passenger_launched PlayerMotion.X 0
 execute on passengers run function player_motion:apply/passenger/0.prepare_tree
 execute if score #player_motion.passenger_failed PlayerMotion.X matches 1 on passengers run function player_motion:apply/passenger/6.restore_tree
-execute if score #player_motion.passenger_failed PlayerMotion.X matches 1 run return 0
+execute if score #player_motion.passenger_failed PlayerMotion.X matches 1 run return fail
 execute on passengers run function player_motion:apply/passenger/4.protect_tree
 execute if score #player_motion.passenger_failed PlayerMotion.X matches 1 on passengers run function player_motion:apply/passenger/6.restore_tree
-execute if score #player_motion.passenger_failed PlayerMotion.X matches 1 run return 0
+execute if score #player_motion.passenger_failed PlayerMotion.X matches 1 run return fail
 
 execute unless entity @s[type=player] run function player_motion:apply/2.protect
 # Do not expose the root or its passengers if enabling protection failed.
 execute unless entity @s[type=player] unless data storage player_motion: _{Invulnerable:true} on passengers run function player_motion:apply/passenger/6.restore_tree
-execute unless entity @s[type=player] unless data storage player_motion: _{Invulnerable:true} run return 0
+execute unless entity @s[type=player] unless data storage player_motion: _{Invulnerable:true} run return fail
 function player_motion:apply/3.prepare
 execute if score #player_motion PlayerMotion.X matches 1 run function player_motion:apply/4.apply
 execute on passengers run function player_motion:apply/passenger/6.restore_tree

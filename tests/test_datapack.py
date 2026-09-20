@@ -531,7 +531,7 @@ class DataPackContractTests(unittest.TestCase):
         self.assertNotIn("player_motion.internal.", launch + summon)
         self.assertNotIn('type:"entity_eye_height"', launch)
         main = read("player_motion/data/player_motion/function/apply/1.launch.mcfunction")
-        self.assertIn("matches 0 if score @s PlayerMotion.Y matches 0 if score @s PlayerMotion.Z matches 0 run return 0", main)
+        self.assertIn("matches 0 if score @s PlayerMotion.Y matches 0 if score @s PlayerMotion.Z matches 0 run return fail", main)
         crystal = read("player_motion/data/player_motion/function/apply/summon/1.crystal.mcfunction")
         self.assertIn("if score #player_motion PlayerMotion.Y matches 1", crystal)
 
@@ -595,12 +595,12 @@ class DataPackContractTests(unittest.TestCase):
         self.assertTrue(path.is_file(), "nonplayer protection helper must exist")
         protect = path.read_text(encoding="utf-8")
         main = (directory / "1.launch.mcfunction").read_text(encoding="utf-8")
-        player_guard = "execute if entity @s[type=player] run return 0"
+        player_guard = "execute if entity @s[type=player] run return fail"
         initialize = "data modify storage player_motion: _.Invulnerable set value true"
-        original_guard = 'execute if predicate {type:"entity_properties",entity:"this",predicate:{nbt:{Invulnerable:true}}} run return 0'
+        original_guard = 'execute if predicate {type:"entity_properties",entity:"this",predicate:{nbt:{Invulnerable:true}}} run return fail'
         before = "data modify storage player_motion: _.launch.before set from entity @s Motion"
         enable = "execute store success storage player_motion: _.Invulnerable byte 1 run data modify entity @s Invulnerable set value 1b"
-        success_guard = "execute unless data storage player_motion: _{Invulnerable:true} run return 0"
+        success_guard = "execute unless data storage player_motion: _{Invulnerable:true} run return fail"
         mark = "tag @s add player_motion.restore_invulnerable"
         after = "data modify storage player_motion: _.launch.after set from entity @s Motion"
         order = (player_guard, initialize, original_guard, before, enable, success_guard, mark, after)
@@ -611,7 +611,7 @@ class DataPackContractTests(unittest.TestCase):
         self.assertIn("execute unless entity @s[type=player] run function player_motion:apply/2.protect", main)
         self.assertLess(main.index("apply/2.protect"), main.index("apply/3.prepare"))
         self.assertNotIn("nbt=", main)
-        self.assertIn("execute unless entity @s[type=player] unless data storage player_motion: _{Invulnerable:true} run return 0", main)
+        self.assertIn("execute unless entity @s[type=player] unless data storage player_motion: _{Invulnerable:true} run return fail", main)
         self.assertIn("execute if score #player_motion PlayerMotion.X matches 1 run function player_motion:apply/4.apply", main)
         self.assertGreater(main.index("apply/5.restore_invulnerable"), main.index("apply/4.apply"))
 
@@ -636,7 +636,7 @@ class DataPackContractTests(unittest.TestCase):
             self.assertEqual(evaluate(expression, values), expected)
 
         prepare = (directory / "3.prepare.mcfunction").read_text(encoding="utf-8")
-        zero_guard = "execute if score #player_motion PlayerMotion.X matches 0 run return 0"
+        zero_guard = "execute if score #player_motion PlayerMotion.X matches 0 run return fail"
         self.assertIn(zero_guard, prepare)
         self.assertLess(prepare.index(zero_guard), prepare.index('type:"div"'))
 
@@ -646,15 +646,15 @@ class DataPackContractTests(unittest.TestCase):
         restore = path.read_text(encoding="utf-8")
         lines = [line for line in restore.splitlines() if line and not line.startswith("#")]
         self.assertEqual(lines[:2], [
-            "execute if entity @s[type=player] run return 0",
-            "execute unless entity @s[tag=player_motion.restore_invulnerable] run return 0",
+            "execute if entity @s[type=player] run return fail",
+            "execute unless entity @s[tag=player_motion.restore_invulnerable] run return fail",
         ])
         probes = []
         for i, line in enumerate(lines):
             match = re.fullmatch(r"execute store result score #player_motion PlayerMotion.X run data get entity @s Motion\[([012])\] (-?1)", line)
             if match:
                 probes.append(tuple(map(int, match.groups())))
-                self.assertEqual(lines[i + 1], "execute unless score #player_motion PlayerMotion.X matches -10..10 run return 0")
+                self.assertEqual(lines[i + 1], "execute unless score #player_motion PlayerMotion.X matches -10..10 run return fail")
         self.assertEqual(probes, [(0, 1), (0, -1), (1, 1), (1, -1), (2, 1), (2, -1)])
         write = "execute store success score #player_motion PlayerMotion.X run data modify entity @s Invulnerable set value 0b"
         remove = "execute if score #player_motion PlayerMotion.X matches 1 run tag @s remove player_motion.restore_invulnerable"
@@ -680,7 +680,7 @@ class DataPackContractTests(unittest.TestCase):
         self.assertIn("execute on passengers run function player_motion:apply/passenger/6.restore_tree", restore)
         self.assertNotIn("nbt=", nonplayer)
         self.assertIn("data modify storage player_motion: _.Invulnerable set value true", nonplayer)
-        self.assertIn('execute if predicate {type:"entity_properties",entity:"this",predicate:{nbt:{Invulnerable:true}}} run return 0', nonplayer)
+        self.assertIn('execute if predicate {type:"entity_properties",entity:"this",predicate:{nbt:{Invulnerable:true}}} run return fail', nonplayer)
         self.assertIn("execute store success storage player_motion: _.Invulnerable byte 1 run data modify entity @s Invulnerable set value 1b", nonplayer)
         self.assertIn("execute if data storage player_motion: _{Invulnerable:true} run tag @s add player_motion.restore_invulnerable", nonplayer)
         self.assertIn("execute unless data storage player_motion: _{Invulnerable:true} run scoreboard players set #player_motion.passenger_failed PlayerMotion.X 1", nonplayer)
@@ -701,7 +701,7 @@ class DataPackContractTests(unittest.TestCase):
         after = "execute on passengers run function player_motion:apply/passenger/6.restore_tree"
         self.assertLess(main.index(before), main.index("run function player_motion:apply/2.protect"))
         self.assertGreater(main.rindex(after), main.index("run function player_motion:apply/4.apply"))
-        self.assertIn("if score #player_motion.passenger_failed PlayerMotion.X matches 1 run return 0", main)
+        self.assertIn("if score #player_motion.passenger_failed PlayerMotion.X matches 1 run return fail", main)
 
     def test_entity_selectors_do_not_search_nbt(self):
         functions = PACK / "data/player_motion/function"
@@ -731,7 +731,7 @@ class DataPackContractTests(unittest.TestCase):
         self.assertIn("player_motion:passenger_resistance_boost $(boost) add_multiplied_total", boost)
         self.assertIn("modifier remove player_motion:passenger_resistance_boost", restore)
         self.assertIn("tag @s remove player_motion.passenger_resistance_boost", restore)
-        abort = "execute if score #player_motion.passenger_failed PlayerMotion.X matches 1 run return 0"
+        abort = "execute if score #player_motion.passenger_failed PlayerMotion.X matches 1 run return fail"
         self.assertLess(main.index(abort), main.index("run function player_motion:apply/2.protect"))
         self.assertLess(main.index(abort), main.index("on passengers run function player_motion:apply/passenger/4.protect_tree"))
         self.assertIn("scoreboard players set #player_motion.passenger_launched PlayerMotion.X 0", main)
@@ -804,9 +804,9 @@ class DataPackContractTests(unittest.TestCase):
             if line and not line.startswith("#")
         ]
         guards = [
-            "execute if entity @s[type=player,gamemode=spectator] run return 0",
-            "execute if entity @s[type=player,gamemode=creative] if predicate {type:\"entity_properties\",entity:\"this\",predicate:{flags:{is_flying:true,is_fall_flying:false}}} run return 0",
-            "execute if entity @s[type=player] on vehicle run return 0",
+            "execute if entity @s[type=player,gamemode=spectator] run return fail",
+            "execute if entity @s[type=player,gamemode=creative] if predicate {type:\"entity_properties\",entity:\"this\",predicate:{flags:{is_flying:true,is_fall_flying:false}}} run return fail",
+            "execute if entity @s[type=player] on vehicle run return fail",
         ]
         self.assertEqual(
             commands[:3],

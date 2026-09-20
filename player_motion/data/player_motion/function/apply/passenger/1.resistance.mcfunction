@@ -4,7 +4,7 @@ execute if score #player_motion PlayerMotion.X matches 1 run tag @s add player_m
 
 # This attribute is clamped to [0,1]. Its unscaled integer result is 1 only at full resistance.
 execute store result score #player_motion PlayerMotion.X run attribute @s explosion_knockback_resistance get
-execute if score #player_motion PlayerMotion.X matches 1 run return 0
+execute if score #player_motion PlayerMotion.X matches 1 run return fail
 
 # Measure a conservative lower bound. Zero (including a -1 total modifier) cannot be boosted.
 execute store result score #player_motion PlayerMotion.X run attribute @s explosion_knockback_resistance get 1000000000
